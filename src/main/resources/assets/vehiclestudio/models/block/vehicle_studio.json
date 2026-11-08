@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "vehiclestudio:block/vehicle_studio_top",
+    "bottom": "vehiclestudio:block/vehicle_studio_bottom",
+    "side": "vehiclestudio:block/vehicle_studio_side"
+  }
+}
