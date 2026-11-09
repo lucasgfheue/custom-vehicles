@@ -15,7 +15,11 @@ public enum PartKind {
     /** Faro o luz: brilla (siempre, con las luces encendidas o al frenar). */
     LIGHT,
     /** Tubo de escape: echa humo mientras el motor esta en marcha. */
-    EXHAUST;
+    EXHAUST,
+    /** Helice: palas que giran (hacia delante como un avion o hacia arriba como un helicoptero). Hace volar. */
+    PROPELLER,
+    /** Propulsor: tobera que echa fuego por detras. Da el turbo y tambien hace volar. */
+    THRUSTER;
 
     public String key() {
         return name().toLowerCase(Locale.ROOT);
@@ -30,8 +34,13 @@ public enum PartKind {
         return fallback;
     }
 
-    /** Las ruedas, asientos, volantes y escapes tienen su propio dibujo; los demas son cubos texturizados. */
+    /** Las ruedas, asientos, volantes, escapes, helices y propulsores tienen su propio dibujo; los demas son cubos. */
     public boolean isBox() {
         return this == BODY || this == LIGHT;
+    }
+
+    /** Helices y propulsores: lo que hace volar. */
+    public boolean propels() {
+        return this == PROPELLER || this == THRUSTER;
     }
 }

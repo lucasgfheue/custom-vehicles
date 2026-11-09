@@ -74,14 +74,33 @@ public final class VehicleEngineSound extends AbstractTickableSoundInstance {
         this.y = this.vehicle.getY();
         this.z = this.vehicle.getZ();
         float speed = this.vehicle.getSpeedForSound();
-        float top = Math.max(0.05f, d.maxSpeed / 3.6f / 20f);
+        boolean flying = this.vehicle.flying();
+        float top = Math.max(0.05f, (flying ? d.airSpeed : d.maxSpeed) / 3.6f / 20f);
         float f = Mth.clamp(speed / top, 0f, 1f);
-        if (this.kind == EngineSound.ELECTRIC) {
-            this.volume = 0.35f + f * 0.5f;
-            this.pitch = 0.8f + f * 1.0f;
-        } else {
-            this.volume = 0.3f + f * 0.6f;
-            this.pitch = 0.5f + f * 1.1f;
+        if (flying) {
+            // en el aire suena siempre fuerte (las helices no paran aunque este quieto)
+            f = Math.max(f, 0.55f);
+        }
+        if (this.vehicle.boosting()) {
+            f = Math.min(1.2f, f + 0.3f);
+        }
+        switch (this.kind) {
+            case ELECTRIC -> {
+                this.volume = 0.35f + f * 0.5f;
+                this.pitch = 0.8f + f * 1.0f;
+            }
+            case DRONE -> {
+                this.volume = 0.4f + f * 0.6f;
+                this.pitch = 0.7f + f * 0.9f;
+            }
+            case JET -> {
+                this.volume = 0.25f + f * 0.75f;
+                this.pitch = 0.6f + f * 0.7f;
+            }
+            default -> {
+                this.volume = 0.3f + f * 0.6f;
+                this.pitch = 0.5f + f * 1.1f;
+            }
         }
     }
 }

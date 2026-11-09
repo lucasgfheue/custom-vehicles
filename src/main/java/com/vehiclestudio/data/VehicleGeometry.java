@@ -16,9 +16,16 @@ public final class VehicleGeometry {
     private VehicleGeometry() {
     }
 
-    /** Lo que mueve las piezas: distancia rodada (bloques), giro del volante (-1 derecha a 1 izquierda) y luces. */
-    public record Motion(float rolled, float steer, boolean lights, boolean braking) {
-        public static final Motion REST = new Motion(0f, 0f, false, false);
+    /**
+     * Lo que mueve las piezas: distancia rodada (bloques), giro del volante (-1 derecha a 1 izquierda), luces, giro de
+     * las helices (radianes) y fuerza de la llama de los propulsores (0 apagada, 1 normal, mas con el turbo).
+     */
+    public record Motion(float rolled, float steer, boolean lights, boolean braking, float spin, float thrust) {
+        public static final Motion REST = new Motion(0f, 0f, false, false, 0f, 0f);
+
+        public Motion(float rolled, float steer, boolean lights, boolean braking) {
+            this(rolled, steer, lights, braking, 0f, 0f);
+        }
     }
 
     /**
@@ -51,6 +58,7 @@ public final class VehicleGeometry {
                         inner[i * 3 + 2] = -motion.steer() * 1.6f;
                     }
                 }
+                case PROPELLER -> inner[i * 3 + (p.propAxis == PropAxis.TOP ? 1 : 2)] = motion.spin();
                 default -> {
                 }
             }
@@ -76,7 +84,8 @@ public final class VehicleGeometry {
      */
     public static float[] layout(VehicleDefinition d) {
         float[] s = d.size();
-        return new float[]{s[3], s[4], s[5], d.scale};
+        float[] b = d.bounds();
+        return new float[]{s[3], s[4], s[5], d.scale, Math.max(0f, b[4] - b[1])};
     }
 
     /**
@@ -84,8 +93,21 @@ public final class VehicleGeometry {
      * vehiculo. Es la misma transformacion que usa el renderer.
      */
     public static Matrix4f modelToWorld(float[] layout, float yaw) {
+        return modelToWorld(layout, yaw, 0f, 0f);
+    }
+
+    /**
+     * Igual, inclinado: pitch levanta el morro (grados, positivo = arriba) y roll inclina hacia un lado (positivo =
+     * baja el lado izquierdo, como al girar a la izquierda en el aire). Gira alrededor del centro del vehiculo.
+     */
+    public static Matrix4f modelToWorld(float[] layout, float yaw, float pitch, float roll) {
         float k = layout[3] / 16f;
-        return new Matrix4f().rotateY((180f - yaw) * DEG).scale(-k, k, k).translate(-layout[0], -layout[1], -layout[2]);
+        Matrix4f m = new Matrix4f().rotateY((180f - yaw) * DEG);
+        if (pitch != 0f || roll != 0f) {
+            float hc = layout.length > 4 ? layout[4] / 2f * k : 0f;
+            m.translate(0f, hc, 0f).rotateX(pitch * DEG).rotateZ(roll * DEG).translate(0f, -hc, 0f);
+        }
+        return m.scale(-k, k, k).translate(-layout[0], -layout[1], -layout[2]);
     }
 
     /** Puntos de los asientos en el espacio del modelo (pixeles), en el orden de {@link VehicleDefinition#seats()}. */
@@ -101,6 +123,44 @@ public final class VehicleGeometry {
             out[s] = new float[]{v.x, v.y, v.z};
         }
         return out;
+    }
+
+    /**
+     * Salidas de los propulsores: {x, y, z, dirX, dirY, dirZ, radio, largo de la llama} en el espacio del modelo
+     * (pixeles; la direccion, unitaria).
+     */
+    public static float[][] thrusters(VehicleDefinition d) {
+        Matrix4f[] mats = PoseSolver.solve(d.parts, null, null);
+        List<float[]> out = new ArrayList<>();
+        Vector3f v = new Vector3f();
+        Vector3f o = new Vector3f();
+        for (int i = 0; i < d.parts.size(); i++) {
+            VehiclePart p = d.parts.get(i);
+            if (p.kind != PartKind.THRUSTER) {
+                continue;
+            }
+            float[] e = PropulsionShapes.outlet(p);
+            mats[i].transformPosition(e[0], e[1], e[2], v);
+            mats[i].transformPosition(e[0], e[1], e[2] + 1f, o);
+            float dx = o.x - v.x;
+            float dy = o.y - v.y;
+            float dz = o.z - v.z;
+            float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (len < 1.0e-6f) {
+                continue;
+            }
+            float r = PropulsionShapes.outletRadius(p);
+            out.add(new float[]{v.x, v.y, v.z, dx / len, dy / len, dz / len, r, flameLength(p, 1f)});
+        }
+        return out.toArray(new float[0][]);
+    }
+
+    /** Largo de la llama (pixeles) con una fuerza dada (0 apagada, 1 normal, mas con el turbo). */
+    public static float flameLength(VehiclePart p, float thrust) {
+        if (thrust <= 0f) {
+            return 0f;
+        }
+        return PropulsionShapes.nozzleRadius(p) * 2f * p.flameSize * thrust;
     }
 
     /** Salidas de humo: {x, y, z, dirX, dirY, dirZ} en el espacio del modelo. */

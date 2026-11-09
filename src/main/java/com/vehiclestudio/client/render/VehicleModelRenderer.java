@@ -6,6 +6,7 @@ import com.vehiclestudio.data.MaterialIds;
 import com.vehiclestudio.data.PaintLayout;
 import com.vehiclestudio.data.LightMode;
 import com.vehiclestudio.data.PartKind;
+import com.vehiclestudio.data.PropulsionShapes;
 import com.vehiclestudio.data.Shapes;
 import com.vehiclestudio.data.PoseSolver;
 import com.vehiclestudio.data.Voxels;
@@ -99,6 +100,20 @@ public final class VehicleModelRenderer {
                             rawQuad(vc, pm, pn, solid, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, nx, ny, nz,
                                     multiply(argb, tint), lt, overlay));
                 }
+                case PROPELLER -> PropulsionShapes.propeller(p,
+                        (x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, nx, ny, nz, argb) ->
+                                rawQuad(vc, pm, pn, solid, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, nx, ny, nz,
+                                        multiply(argb, tint), lt, overlay));
+                case THRUSTER -> {
+                    PropulsionShapes.thruster(p,
+                            (x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, nx, ny, nz, argb) ->
+                                    rawQuad(vc, pm, pn, solid, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, nx, ny,
+                                            nz, multiply(argb, tint), lt, overlay));
+                    float len = VehicleGeometry.flameLength(p, motion.thrust());
+                    if (len > 0.05f) {
+                        drawFlame(vc, pm, pn, solid, p, len, tint, overlay);
+                    }
+                }
                 default -> drawBox(vc, m, normal, p.x, p.y, p.z, p.x + p.w, p.y + p.h, p.z + p.d, sprite, p.stretch,
                         color, lt, overlay);
             }
@@ -106,6 +121,22 @@ public final class VehicleModelRenderer {
                 drawVoxels(vc, m, normal, p, solid, tint, lt, overlay);
             }
         }
+    }
+
+    /** La llama de un propulsor: con brillo maximo y un color en cada esquina (claro en la tobera, oscuro en la punta). */
+    private static void drawFlame(VertexConsumer vc, Matrix4f m, Matrix3f nm, TextureAtlasSprite s, VehiclePart p,
+                                  float length, int tint, int overlay) {
+        Vector3f n = nm.transform(0f, 1f, 0f, new Vector3f());
+        if (n.lengthSquared() > 1.0e-12f) {
+            n.normalize();
+        }
+        float[] uv = {s.getU0(), s.getV0(), s.getU0(), s.getV1(), s.getU1(), s.getV1(), s.getU1(), s.getV0()};
+        int[] count = {0};
+        PropulsionShapes.flame(p, length, (x, y, z, argb) -> {
+            int k = count[0]++ & 3;
+            vertex(vc, m, x, y, z, multiply(argb, tint), uv[k * 2], uv[k * 2 + 1], overlay, LightTexture.FULL_BRIGHT,
+                    n.x(), n.y(), n.z());
+        });
     }
 
     /** Un cuadrilatero suelto con la textura lisa (las formas de {@link Shapes}). */

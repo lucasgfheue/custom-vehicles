@@ -59,6 +59,18 @@ public final class VehicleJson {
         extras.addProperty("engine", d.engine.key());
         o.add("extras", extras);
 
+        JsonObject flight = new JsonObject();
+        flight.addProperty("mode", d.flight.key());
+        flight.addProperty("airSpeed", d.airSpeed);
+        flight.addProperty("climb", d.climb);
+        o.add("flight", flight);
+
+        JsonObject turbo = new JsonObject();
+        turbo.addProperty("boost", d.turbo);
+        turbo.addProperty("time", d.turboTime);
+        turbo.addProperty("recharge", d.turboRecharge);
+        o.add("turbo", turbo);
+
         JsonArray parts = new JsonArray();
         for (VehiclePart p : d.parts) {
             JsonObject j = new JsonObject();
@@ -91,6 +103,20 @@ public final class VehicleJson {
                 }
                 case STEERING -> j.addProperty("steeringStyle", p.steeringStyle.key());
                 case LIGHT -> j.addProperty("lightMode", p.lightMode.key());
+                case PROPELLER -> {
+                    JsonObject w = new JsonObject();
+                    w.addProperty("blades", p.blades);
+                    w.addProperty("axis", p.propAxis.key());
+                    w.addProperty("hub", hex(p.rimColor));
+                    j.add("propeller", w);
+                }
+                case THRUSTER -> {
+                    JsonObject w = new JsonObject();
+                    w.addProperty("style", p.thrusterStyle.key());
+                    w.addProperty("flame", hex(p.flameColor));
+                    w.addProperty("flameSize", round(p.flameSize));
+                    j.add("thruster", w);
+                }
                 default -> {
                 }
             }
@@ -153,6 +179,18 @@ public final class VehicleJson {
             d.horn = HornSound.byKey(str(extras, "horn", d.horn.key()), d.horn);
             d.engine = EngineSound.byKey(str(extras, "engine", d.engine.key()), d.engine);
         }
+        JsonObject flight = obj(o, "flight");
+        if (flight != null) {
+            d.flight = FlightMode.byKey(str(flight, "mode", d.flight.key()), d.flight);
+            d.airSpeed = num(flight, "airSpeed", d.airSpeed);
+            d.climb = num(flight, "climb", d.climb);
+        }
+        JsonObject turbo = obj(o, "turbo");
+        if (turbo != null) {
+            d.turbo = num(turbo, "boost", d.turbo);
+            d.turboTime = num(turbo, "time", d.turboTime);
+            d.turboRecharge = num(turbo, "recharge", d.turboRecharge);
+        }
 
         if (o.has("textureSize") && o.get("textureSize").isJsonArray() && o.getAsJsonArray("textureSize").size() == 2) {
             try {
@@ -210,6 +248,18 @@ public final class VehicleJson {
                 }
                 p.steeringStyle = SteeringStyle.byKey(str(j, "steeringStyle", p.steeringStyle.key()), p.steeringStyle);
                 p.lightMode = LightMode.byKey(str(j, "lightMode", p.lightMode.key()), p.lightMode);
+                JsonObject prop = obj(j, "propeller");
+                if (prop != null) {
+                    p.blades = integer(prop, "blades", p.blades);
+                    p.propAxis = PropAxis.byKey(str(prop, "axis", p.propAxis.key()), p.propAxis);
+                    p.rimColor = prop.has("hub") ? parseColor(prop.get("hub"), p.rimColor) : p.rimColor;
+                }
+                JsonObject thr = obj(j, "thruster");
+                if (thr != null) {
+                    p.thrusterStyle = ThrusterStyle.byKey(str(thr, "style", p.thrusterStyle.key()), p.thrusterStyle);
+                    p.flameColor = thr.has("flame") ? parseColor(thr.get("flame"), p.flameColor) : p.flameColor;
+                    p.flameSize = num(thr, "flameSize", p.flameSize);
+                }
                 readPaint(j, p);
                 readUv(j, p);
                 if (j.has("voxels") && j.get("voxels").isJsonPrimitive()) {

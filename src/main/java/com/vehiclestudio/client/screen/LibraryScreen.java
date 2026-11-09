@@ -322,7 +322,7 @@ public class LibraryScreen extends Screen {
             }
             float t = (now % 1_000_000L) / 50f;
             VehicleGeometry.Motion motion = new VehicleGeometry.Motion(t * 0.08f, Mth.sin(t * 0.03f) * 0.6f,
-                    false, false);
+                    false, false, t * 1.2f, 1f);
             preview.render(g, d, motion, -1, true, PaintCache.get(d));
         }
     }
@@ -349,6 +349,13 @@ public class LibraryScreen extends Screen {
             g.drawString(font, Ui.tr("library.info.cost", d.ironCost()), ix, iy, Ui.MUTED, false);
             iy += 10;
             g.drawString(font, Ui.tr("library.info.parts", d.parts.size()), ix, iy, Ui.MUTED, false);
+            if (d.canFly() || d.hasTurbo()) {
+                iy += 10;
+                Component extra = d.canFly() && d.hasTurbo()
+                        ? Ui.tr("library.info.fly_turbo", Ui.fmt(d.airSpeed), Ui.fmt(d.turbo))
+                        : d.canFly() ? Ui.tr("library.info.fly", Ui.fmt(d.airSpeed)) : Ui.tr("library.info.turbo", Ui.fmt(d.turbo));
+                g.drawString(font, extra, ix, iy, 0xFFB8E0FF, false);
+            }
         } else {
             Ui.wrapped(g, font, Ui.tr("library.no_selection"), ix, iy, preview.w - 12, Ui.MUTED);
         }

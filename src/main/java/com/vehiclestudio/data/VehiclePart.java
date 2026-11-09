@@ -52,6 +52,18 @@ public class VehiclePart {
     // --- Luz ---
     public LightMode lightMode = LightMode.HEAD;
 
+    // --- Helice (el color de la pieza es el de las palas y rimColor el del centro) ---
+    /** Numero de palas (2 a 8). */
+    public int blades = 3;
+    public PropAxis propAxis = PropAxis.FRONT;
+
+    // --- Propulsor ---
+    public ThrusterStyle thrusterStyle = ThrusterStyle.JET;
+    /** Color de la llama. */
+    public int flameColor = 0xFF8A1E;
+    /** Largo de la llama respecto al tamano de la tobera (0,3 a 3). */
+    public float flameSize = 1f;
+
     /**
      * Pintura a mano: un color ARGB por texel (alfa 0 = sin pintar, se ve la textura de debajo),
      * con el esquema de {@link PaintLayout}. Puede ser null.
@@ -131,6 +143,11 @@ public class VehiclePart {
         c.driver = driver;
         c.steeringStyle = steeringStyle;
         c.lightMode = lightMode;
+        c.blades = blades;
+        c.propAxis = propAxis;
+        c.thrusterStyle = thrusterStyle;
+        c.flameColor = flameColor;
+        c.flameSize = flameSize;
         c.paint = paint == null ? null : paint.clone();
         c.pw = pw;
         c.ph = ph;
@@ -399,9 +416,46 @@ public class VehiclePart {
         return this;
     }
 
+    /**
+     * Helice con el centro en (cx, cy, cz). FRONT: disco de frente (ancho y alto = diametro, fondo = grosor);
+     * TOP: disco tumbado (ancho y fondo = diametro, alto = grosor).
+     */
+    public static VehiclePart propeller(String name, PropAxis axis, float cx, float cy, float cz, float diameter,
+                                        float thickness, int blades, int color) {
+        float r = diameter / 2f;
+        float t = thickness / 2f;
+        VehiclePart p = axis == PropAxis.TOP
+                ? box(name, cx - r, cy - t, cz - r, diameter, thickness, diameter)
+                : box(name, cx - r, cy - r, cz - t, diameter, diameter, thickness);
+        p.kind = PartKind.PROPELLER;
+        p.propAxis = axis;
+        p.blades = blades;
+        p.color = color & 0xFFFFFF;
+        p.rimColor = 0x3A3A3E;
+        p.material = MaterialIds.METAL;
+        return p;
+    }
+
+    /** Propulsor de seccion size x size y largo length, con el centro en (cx, cy, cz); la llama sale por +Z. */
+    public static VehiclePart thruster(String name, ThrusterStyle style, float cx, float cy, float cz, float size,
+                                       float length, int flameColor) {
+        VehiclePart p = box(name, cx - size / 2f, cy - size / 2f, cz - length / 2f, size, size, length);
+        p.kind = PartKind.THRUSTER;
+        p.thrusterStyle = style;
+        p.flameColor = flameColor & 0xFFFFFF;
+        p.color = 0x8E9096;
+        p.material = MaterialIds.METAL;
+        return p;
+    }
+
     /** Radio de la rueda (en pixeles). */
     public float wheelRadius() {
         return Math.min(h, d) / 2f;
+    }
+
+    /** Radio de la helice (en pixeles): la mitad del lado mas corto de su disco. */
+    public float propRadius() {
+        return (propAxis == PropAxis.TOP ? Math.min(w, d) : Math.min(w, h)) / 2f;
     }
 
     /** Punto donde se sienta quien va en este asiento (pixeles, espacio del modelo, sin girar la pieza). */

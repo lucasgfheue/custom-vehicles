@@ -1,10 +1,13 @@
 package com.vehiclestudio.entity;
 
 import com.vehiclestudio.data.DrivePhysics;
+import com.vehiclestudio.data.FlightMode;
 import com.vehiclestudio.data.HornSound;
+import com.vehiclestudio.data.PartKind;
 import com.vehiclestudio.data.PoseSolver;
 import com.vehiclestudio.data.VehicleDefinition;
 import com.vehiclestudio.data.VehicleGeometry;
+import com.vehiclestudio.data.VehiclePart;
 import com.vehiclestudio.data.VehicleStore;
 import com.vehiclestudio.item.VehicleItem;
 import com.vehiclestudio.network.Payloads;
@@ -44,6 +47,7 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -72,21 +76,26 @@ public class CustomVehicle extends Entity {
     /** Volante del conductor (de -1 derecha a 1 izquierda), para que los demas vean girar las ruedas. */
     private static final EntityDataAccessor<Float> DATA_STEER =
             SynchedEntityData.defineId(CustomVehicle.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Boolean> DATA_BRAKE =
-            SynchedEntityData.defineId(CustomVehicle.class, EntityDataSerializers.BOOLEAN);
+    /** Lo que hace el conductor (FLAG_*), para que los demas vean las luces de freno, las llamas y las helices. */
+    private static final EntityDataAccessor<Integer> DATA_INPUT =
+            SynchedEntityData.defineId(CustomVehicle.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_LIGHTS =
             SynchedEntityData.defineId(CustomVehicle.class, EntityDataSerializers.BOOLEAN);
     /** Quien va en cada asiento: ids de red separados por comas (-1 = libre). */
     private static final EntityDataAccessor<String> DATA_SEATS =
             SynchedEntityData.defineId(CustomVehicle.class, EntityDataSerializers.STRING);
 
-    /** Controles del conductor en este momento. */
-    public record Controls(boolean forward, boolean back, boolean left, boolean right, boolean brake) {
-        public static final Controls NONE = new Controls(false, false, false, false, false);
-    }
+    /** Frenando (luces de freno). */
+    public static final int FLAG_BRAKE = 1;
+    /** Con el turbo encendido. */
+    public static final int FLAG_TURBO = 2;
+    /** Acelerando (llamas mas grandes). */
+    public static final int FLAG_GAS = 4;
+    /** Volando. */
+    public static final int FLAG_FLYING = 8;
 
     /** Lo pone el cliente: los controles si el conductor es el jugador local (null si no). */
-    public static Function<CustomVehicle, Controls> localControls = v -> null;
+    public static Function<CustomVehicle, DrivePhysics.Input> localControls = v -> null;
     /** Lo pone el cliente: sonido del motor y demas efectos. */
     public static Consumer<CustomVehicle> clientEffects = v -> {
     };
@@ -110,8 +119,21 @@ public class CustomVehicle extends Entity {
     private int smokeTimer;
     // Envio de controles al servidor
     private int sentSteer = Integer.MIN_VALUE;
-    private boolean sentBrake;
-    private boolean localBraking;
+    private int sentFlags = -1;
+    private int localFlags;
+    // Inclinacion que se ve (pitch va en el xRot, que viaja solo por la red; roll sale del volante)
+    private float roll;
+    private float rollO;
+    // Cliente: helices y llamas
+    private float spin;
+    private float spinO;
+    private float spinRate;
+    private float thrust;
+    private float thrustO;
+    private boolean wasBoosting;
+    private int flameTimer;
+    // Para el dano de caida: lo rapido que bajaba antes de tocar el suelo
+    private double fallSpeed;
     // Interpolacion para los que no conducen
     private int lerpSteps;
     private double lerpX;
@@ -146,6 +168,8 @@ public class CustomVehicle extends Entity {
     public CustomVehicle(EntityType<? extends CustomVehicle> type, Level level) {
         super(type, level);
         this.blocksBuilding = true;
+        // La gravedad la pone drive(); asi el servidor no echa al conductor por "volar" con el vehiculo
+        this.setNoGravity(true);
     }
 
     /** Coloca un vehiculo en el mundo mirando hacia yaw. */
@@ -170,7 +194,7 @@ public class CustomVehicle extends Entity {
         builder.define(DATA_HURT_TIME, 0);
         builder.define(DATA_HURT_DIR, 1);
         builder.define(DATA_STEER, 0f);
-        builder.define(DATA_BRAKE, false);
+        builder.define(DATA_INPUT, 0);
         builder.define(DATA_LIGHTS, false);
         builder.define(DATA_SEATS, "");
     }
@@ -287,7 +311,7 @@ public class CustomVehicle extends Entity {
 
     /** Matriz del espacio del modelo (pixeles) a desplazamientos en el mundo desde la posicion del vehiculo. */
     public Matrix4f modelToWorld(VehicleDefinition d, float yaw) {
-        return VehicleGeometry.modelToWorld(layout(d), yaw);
+        return VehicleGeometry.modelToWorld(layout(d), yaw, this.getXRot(), this.roll);
     }
 
     /** Puntos de los asientos en el espacio del modelo (pixeles), en el orden de {@link VehicleDefinition#seats()}. */
@@ -652,9 +676,28 @@ public class CustomVehicle extends Entity {
     }
 
     /** Servidor: lo que hace el conductor, para los demas jugadores. */
-    public void setDriverInput(float steer, boolean braking) {
+    public void setDriverInput(float steer, int flags) {
         this.entityData.set(DATA_STEER, Mth.clamp(steer, -1f, 1f));
-        this.entityData.set(DATA_BRAKE, braking);
+        this.entityData.set(DATA_INPUT, flags & (FLAG_BRAKE | FLAG_TURBO | FLAG_GAS | FLAG_FLYING));
+    }
+
+    private int inputFlags() {
+        return isLocallyDriven() ? this.localFlags : this.entityData.get(DATA_INPUT);
+    }
+
+    /** Con el turbo encendido (llamas grandes). */
+    public boolean boosting() {
+        return (inputFlags() & FLAG_TURBO) != 0;
+    }
+
+    /** Volando. */
+    public boolean flying() {
+        return (inputFlags() & FLAG_FLYING) != 0;
+    }
+
+    /** Deposito del turbo del conductor local (0 a 1). */
+    public float turboEnergy() {
+        return this.physics.energy;
     }
 
     public boolean lightsOn() {
@@ -663,7 +706,7 @@ public class CustomVehicle extends Entity {
 
     /** Frenando (para las luces de freno). */
     public boolean braking() {
-        return isLocallyDriven() ? this.localBraking : this.entityData.get(DATA_BRAKE);
+        return (inputFlags() & FLAG_BRAKE) != 0;
     }
 
     private boolean isLocallyDriven() {
@@ -796,22 +839,26 @@ public class CustomVehicle extends Entity {
             return;
         }
         tickLerp();
+        if (!this.isNoGravity()) {
+            this.setNoGravity(true);
+        }
         if (isControlledByLocalInstance()) {
-            Controls c = Controls.NONE;
+            DrivePhysics.Input c = DrivePhysics.Input.NONE;
             if (this.level().isClientSide()) {
-                Controls local = localControls.apply(this);
+                DrivePhysics.Input local = localControls.apply(this);
                 if (local != null) {
                     c = local;
                 }
             }
             drive(d, c);
             if (this.level().isClientSide()) {
-                sendControls(c);
+                sendControls();
             }
         } else {
             this.setDeltaMovement(Vec3.ZERO);
             this.deltaRotation = 0f;
         }
+        tickRoll(d);
         this.checkInsideBlocks();
         if (this.level().isClientSide()) {
             clientTick(d);
@@ -821,44 +868,79 @@ public class CustomVehicle extends Entity {
     }
 
     /** La fisica: acelerar, frenar, girar como una bici (segun la distancia entre ruedas) y derrapar. */
-    private void drive(@Nullable VehicleDefinition d, Controls c) {
+    private void drive(@Nullable VehicleDefinition d, DrivePhysics.Input c) {
         boolean ground = this.onGround();
         boolean water = this.isInWater();
         float deltaYaw = 0f;
         float gripMul = 1f;
+        float flyVy = Float.NaN;
+        boolean flying = false;
+        float pitchTarget = 0f;
         if (d != null) {
-            DrivePhysics.Step step = DrivePhysics.step(d, this.physics, c.forward(), c.back(), c.left(), c.right(),
-                    c.brake(), ground, water);
+            DrivePhysics.Step step = DrivePhysics.step(d, this.physics, c, ground, water);
             deltaYaw = step.deltaYaw();
             gripMul = step.grip();
-            this.localBraking = step.braking();
+            flyVy = step.vy();
+            flying = step.flying();
+            pitchTarget = step.pitch();
+            int flags = 0;
+            if (step.braking()) {
+                flags |= FLAG_BRAKE;
+            }
+            if (step.boosting()) {
+                flags |= FLAG_TURBO;
+            }
+            if (c.forward() || (flying && (c.up() || this.physics.speed > 0.02f))) {
+                flags |= FLAG_GAS;
+            }
+            if (flying) {
+                flags |= FLAG_FLYING;
+            }
+            this.localFlags = flags;
+            if (!this.level().isClientSide()) {
+                // sin conductor lo mueve el servidor: que los demas tambien lo vean
+                this.entityData.set(DATA_INPUT, flags);
+                this.entityData.set(DATA_STEER, this.physics.steer);
+            }
         } else {
             this.physics.speed = 0f;
+            this.localFlags = 0;
         }
         this.deltaRotation = deltaYaw;
         this.setYRot(this.getYRot() + this.deltaRotation);
+        // el morro sube o baja poco a poco (xRot viaja solo al servidor y a los demas)
+        this.setXRot(this.getXRot() + (pitchTarget - this.getXRot()) * 0.2f);
         float speed = this.physics.speed;
         Vec3 v = this.getDeltaMovement();
         double yaw = Math.toRadians(this.getYRot());
         double fx = -Math.sin(yaw);
         double fz = Math.cos(yaw);
-        double grip = ground ? (1.0 - (d == null ? 0 : d.drift) * 0.0085) * gripMul : 0.0;
+        double grip = flying ? gripMul : ground ? (1.0 - (d == null ? 0 : d.drift) * 0.0085) * gripMul : 0.0;
         double hx = v.x + (fx * speed - v.x) * grip;
         double hz = v.z + (fz * speed - v.z) * grip;
-        if (!ground) {
+        if (!ground && !flying) {
             hx *= 0.99;
             hz *= 0.99;
         }
-        double vy = (v.y - 0.08) * 0.98;
-        if (water) {
-            vy = Math.max(vy * 0.5, -0.06);
-            hx *= 0.9;
-            hz *= 0.9;
+        double vy;
+        if (!Float.isNaN(flyVy)) {
+            vy = flyVy;
+        } else {
+            vy = (v.y - 0.08) * 0.98;
+            if (water) {
+                vy = Math.max(vy * 0.5, -0.06);
+                hx *= 0.9;
+                hz *= 0.9;
+            }
         }
         this.setDeltaMovement(hx, vy, hz);
         double beforeX = this.getX();
         double beforeZ = this.getZ();
         this.move(MoverType.SELF, this.getDeltaMovement());
+        if (this.verticalCollision && !Float.isNaN(this.physics.vy)) {
+            // tocando techo o suelo: deja de subir o bajar
+            this.physics.vy = 0f;
+        }
         if (this.horizontalCollision) {
             // choque: se queda con lo que avanzo de verdad
             double moved = (this.getX() - beforeX) * fx + (this.getZ() - beforeZ) * fz;
@@ -866,13 +948,72 @@ public class CustomVehicle extends Entity {
         }
     }
 
-    /** Cliente del conductor: manda el volante y el freno cuando cambian. */
-    private void sendControls(Controls c) {
+    /** Cliente del conductor: manda el volante, el freno, el turbo... cuando cambian. */
+    private void sendControls() {
         int s = Math.round(this.physics.steer * 100f);
-        if (s != this.sentSteer || this.localBraking != this.sentBrake) {
+        if (s != this.sentSteer || this.localFlags != this.sentFlags) {
             this.sentSteer = s;
-            this.sentBrake = this.localBraking;
-            PacketDistributor.sendToServer(new Payloads.DriveInput(s, this.localBraking));
+            this.sentFlags = this.localFlags;
+            PacketDistributor.sendToServer(new Payloads.DriveInput(s, this.localFlags));
+        }
+    }
+
+    /** Inclinacion hacia un lado (todos los lados): sale del volante cuando vuela. */
+    private void tickRoll(@Nullable VehicleDefinition d) {
+        this.rollO = this.roll;
+        float target = 0f;
+        if (d != null && flying()) {
+            float steer = isLocallyDriven() || !this.level().isClientSide() && getControllingPassenger() == null
+                    ? this.physics.steer : this.entityData.get(DATA_STEER);
+            target = steer * (d.flight == FlightMode.PLANE ? 28f : 8f);
+        }
+        this.roll += (target - this.roll) * 0.25f;
+        if (Math.abs(this.roll) < 1.0e-3f) {
+            this.roll = 0f;
+        }
+    }
+
+    /** Inclinacion del morro (grados, positivo = arriba) para dibujar. */
+    public float getPitchShown(float partialTick) {
+        return Mth.lerp(partialTick, this.xRotO, this.getXRot());
+    }
+
+    /** Inclinacion hacia un lado (grados, positivo = baja el lado izquierdo) para dibujar. */
+    public float getRollShown(float partialTick) {
+        return Mth.lerp(partialTick, this.rollO, this.roll);
+    }
+
+    /** Giro de las helices (radianes) para dibujar. */
+    public float getSpin(float partialTick) {
+        return Mth.lerp(partialTick, this.spinO, this.spin);
+    }
+
+    /** Fuerza de las llamas (0 apagadas, 1 normal, mas con el turbo) para dibujar. */
+    public float getThrust(float partialTick) {
+        return Mth.lerp(partialTick, this.thrustO, this.thrust);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Dano de caida: segun lo rapido que llega al suelo (los que vuelan bajan despacio y no se hacen dano)
+    // ---------------------------------------------------------------------------------------
+
+    @Override
+    protected void checkFallDamage(double y, boolean onGround, BlockState state, BlockPos pos) {
+        if (onGround) {
+            if (this.fallSpeed > 0.5) {
+                // altura desde la que se cae en Minecraft para llegar con esa velocidad
+                float equivalent = (float) (this.fallSpeed * this.fallSpeed / 0.16);
+                this.causeFallDamage(equivalent, 1.0f, this.damageSources().fall());
+                if (equivalent > 3f && !this.level().isClientSide()) {
+                    // un golpe fuerte tambien dana el vehiculo
+                    this.hurt(this.damageSources().fall(), (equivalent - 3f) * 0.5f);
+                }
+            }
+            this.fallSpeed = 0.0;
+            this.resetFallDistance();
+        } else {
+            this.fallSpeed = y < 0.0 ? -y : 0.0;
+            this.resetFallDistance();
         }
     }
 
@@ -983,10 +1124,80 @@ public class CustomVehicle extends Entity {
         if (d == null) {
             return;
         }
-        if (getControllingPassenger() != null) {
+        boolean driven = getControllingPassenger() != null;
+        int flags = inputFlags();
+        // helices: despacio con el motor en marcha, rapido al acelerar o volar
+        float rate = !driven ? 0f : (flags & (FLAG_GAS | FLAG_FLYING)) != 0 ? 1.9f : 0.6f;
+        if ((flags & FLAG_TURBO) != 0) {
+            rate = 2.4f;
+        }
+        this.spinRate += (rate - this.spinRate) * (rate > this.spinRate ? 0.15f : 0.05f);
+        this.spinO = this.spin;
+        this.spin += this.spinRate;
+        if (this.spin > (float) (Math.PI * 2000.0)) {
+            this.spin -= (float) (Math.PI * 2000.0);
+            this.spinO -= (float) (Math.PI * 2000.0);
+        }
+        // llamas: pequenas en marcha, normales acelerando, grandes con el turbo (con un poco de parpadeo)
+        float flame = !driven ? 0f : (flags & FLAG_TURBO) != 0 ? 1.9f : (flags & FLAG_GAS) != 0 ? 1f : 0.45f;
+        this.thrustO = this.thrust;
+        this.thrust += (flame - this.thrust) * 0.35f;
+        if (this.thrust > 0.05f) {
+            this.thrust *= 0.94f + this.random.nextFloat() * 0.12f;
+        }
+        boolean boost = (flags & FLAG_TURBO) != 0;
+        if (boost && !this.wasBoosting) {
+            this.level().playLocalSound(getX(), getY(), getZ(),
+                    BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.withDefaultNamespace("entity.firework_rocket.launch")),
+                    SoundSource.NEUTRAL, 1.2f, 0.8f, false);
+        }
+        this.wasBoosting = boost;
+        if (driven) {
             clientEffects.accept(this);
             smoke(d, Math.abs(forward));
+            flames(d, boost);
         }
+    }
+
+    /** Chispas de fuego de los propulsores con el turbo o volando. */
+    private void flames(VehicleDefinition d, boolean boost) {
+        if (!boost && !flying()) {
+            return;
+        }
+        if (--this.flameTimer > 0) {
+            return;
+        }
+        this.flameTimer = boost ? 1 : 3;
+        float[][] outlets = VehicleGeometry.thrusters(d);
+        if (outlets.length == 0) {
+            return;
+        }
+        Matrix4f m = modelToWorld(d, this.getYRot());
+        Vector3f v = new Vector3f();
+        Vector3f dir = new Vector3f();
+        for (int i = 0; i < outlets.length; i++) {
+            float[] o = outlets[i];
+            VehiclePart part = thrusterPart(d, i);
+            m.transformPosition(o[0], o[1], o[2], v);
+            m.transformDirection(o[3], o[4], o[5], dir);
+            if (dir.lengthSquared() > 1.0e-8f) {
+                dir.normalize();
+            }
+            boolean blue = part != null && (part.flameColor & 0xFF) > ((part.flameColor >> 16) & 0xFF);
+            this.level().addParticle(blue ? ParticleTypes.SOUL_FIRE_FLAME : ParticleTypes.FLAME,
+                    getX() + v.x, getY() + v.y, getZ() + v.z, dir.x * 0.15, dir.y * 0.15, dir.z * 0.15);
+        }
+    }
+
+    @Nullable
+    private static VehiclePart thrusterPart(VehicleDefinition d, int index) {
+        int n = 0;
+        for (VehiclePart p : d.parts) {
+            if (p.kind == PartKind.THRUSTER && n++ == index) {
+                return p;
+            }
+        }
+        return null;
     }
 
     private void smoke(VehicleDefinition d, double moved) {

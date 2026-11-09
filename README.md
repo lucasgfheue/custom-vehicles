@@ -1,23 +1,25 @@
 # Vehicle Studio — NeoForge 1.21.1
 
-Crea **tus propios vehículos con ruedas dentro de Minecraft**, desde cero y sin programar: coches, camionetas,
-autobuses, motos, karts, tractores... Móntalos con cubos, elige y retoca las **ruedas de referencia**, coloca los
-**asientos**, el volante, las luces y el escape, píntalos y **condúcelos con WASD**.
+Crea **tus propios vehículos dentro de Minecraft**, desde cero y sin programar: coches, camionetas, autobuses, motos,
+karts, tractores... y también **helicópteros, avionetas, drones y coches cohete**. Móntalos con cubos, elige y
+retoca las **ruedas de referencia**, coloca los **asientos**, el volante, las luces y el escape, añade **hélices y
+propulsores** para volar o ir más rápido, píntalos y **condúcelos con WASD**.
 
 ## Características
 
 El editor funciona como el de Creature Studio: la **vista 3D ocupa casi toda la pantalla** y a la derecha hay un
-panel con **pestañas con iconos** (teclas 1 a 7). **H** oculta el panel, **F** encuadra el modelo y la rueda del
+panel con **pestañas con iconos** (teclas 1 a 8). **H** oculta el panel, **F** encuadra el modelo y la rueda del
 ratón acerca hacia donde está el cursor.
 
 | Pestaña | Qué hay dentro |
 |---|---|
-| **Plantilla** | 10 vehículos para empezar: coche, deportivo, camioneta, autobús, moto, kart, tractor, buggy, carreta y uno vacío (chasis, 4 ruedas y un asiento). Pasa el ratón para verlos en 3D y haz clic para usarlos. |
-| **Piezas** | Añadir piezas de cada tipo: **carrocería** (cubos), **rueda**, **asiento**, **volante/manillar**, **luz** y **escape**. Duplicar, espejar (crea la pieza del otro lado), borrar, centrar, nombre y «unida a». Para las luces eliges cuándo se encienden (faro, trasera o siempre) y para el volante su forma (volante o manillar de moto). |
+| **Plantilla** | 14 vehículos para empezar: coche, deportivo, camioneta, autobús, moto, kart, tractor, buggy, carreta, **helicóptero**, **avioneta**, **dron**, **coche cohete** y uno vacío (chasis, 4 ruedas y un asiento). Pasa el ratón para verlos en 3D y haz clic para usarlos. |
+| **Piezas** | Añadir piezas de cada tipo: **carrocería** (cubos), **rueda**, **asiento**, **volante/manillar**, **luz**, **escape**, **hélice** y **propulsor**. Duplicar, espejar (crea la pieza del otro lado), borrar, centrar, nombre y «unida a». Para las luces eliges cuándo se encienden (faro, trasera o siempre) y para el volante su forma (volante o manillar de moto). |
 | **Forma** | Posición, tamaño, pivote y giro en X/Y/Z (16 píxeles = 1 bloque), también con el ratón. |
 | **Ruedas** | **10 ruedas de referencia** (coche, deportiva, camión, todoterreno, moto, bicicleta, tractor, carreta, kart y monster truck) que se ponen con un clic sin mover la rueda de sitio. Después se edita todo: diámetro, ancho, si **gira al doblar**, color y dibujo de la goma (lisa, bloques, tacos, tractor), color, forma (disco, tapacubos, 5 radios, estrella, bicicleta, madera) y tamaño de la llanta. Botones **Igual en todas las ruedas** y **Poner 4 ruedas**. |
 | **Asientos** | Hasta 12 asientos con 6 estilos (de coche, banco, sillín, de carreras, silla e invisible) y cuál es el del **conductor**. |
 | **Pintar** | Color y más de 50 texturas (metal, fibra de carbono, chapa estriada, rejilla, cuadros, cuero, faro, cristal...), pintura píxel a píxel con pincel, goma y gotero, **minibloques** para los detalles y skins PNG (importar/exportar). |
+| **Vuelo** | **Hélices** (mirando hacia delante como una avioneta o hacia arriba como un helicóptero; de 2 a 8 palas, diámetro y colores) y **propulsores** (turbina, cohete o tobera, con llama del color y el largo que quieras). **Vuela**: no, como un **helicóptero** (sube, baja y se queda quieto en el aire) o como un **avión** (necesita velocidad para despegar y para no caer), con su velocidad en el aire y lo rápido que sube. **Turbo** (tecla R): velocidad extra, cuánto dura y cuánto tarda en recargarse. |
 | **Conducción** | Velocidad máxima (hasta 150 km/h), aceleración, frenos, marcha atrás, giro de las ruedas, derrape, cuánto sube (bloques), vida, escala, si **atropella** a los mobs, **maletero** (de 9 a 54 huecos), **bocina** (coche, camión, campana, bici, payaso, vaca) y sonido del motor (normal, eléctrico o ninguno). Muestra lo que cuesta en hierro. |
 
 En la barra de la vista 3D, **Probar** hace rodar y girar las ruedas (y enciende las luces de freno) y **Luces**
@@ -27,6 +29,10 @@ goma (E) y gotero (I). Deshacer/rehacer (Ctrl+Z / Ctrl+Y), guardar (Ctrl+S), dup
 **En el juego**
 - Las ruedas giran al avanzar, las delanteras (las que «giran al doblar») apuntan hacia donde vas, el volante y el
   manillar se mueven, los faros y las luces de freno se encienden, sale humo del escape y suena el motor.
+- Las **hélices** giran (despacio en marcha, rápido al acelerar o volar), los **propulsores** echan fuego (enorme con
+  el turbo) y, al volar, el vehículo **se inclina**: un avión levanta el morro al subir y se ladea en las curvas; un
+  helicóptero baja el morro al avanzar. En pantalla, la **altura** sobre el suelo y la barra del **turbo**.
+- Los que vuelan no se caen a plomo: sin conductor, un helicóptero baja despacio hasta el suelo y un avión planea.
 - Se conduce como en un juego de coches: las curvas dependen de la distancia entre ejes y, a mucha velocidad, se
   abren (frena o usa el freno de mano para girar cerrado). Velocímetro en pantalla mientras conduces.
 - Los vehículos **andan siempre** (no gastan combustible).
@@ -40,7 +46,9 @@ goma (E) y gotero (I). Deshacer/rehacer (Ctrl+Z / Ctrl+Y), guardar (Ctrl+S), dup
 | **Clic derecho** en un vehículo | Subirse (el primero que sube conduce) |
 | **W / S** | Acelerar · frenar y marcha atrás |
 | **A / D** | Girar |
-| **Espacio** | Freno de mano (derrapa en las curvas) |
+| **Espacio** | Freno de mano (derrapa en las curvas). En los que vuelan: **subir** (y despegar) |
+| **Ctrl** (correr) | En los que vuelan: **bajar** |
+| **R** | **Turbo** (si tiene propulsores; se recarga al soltar la tecla) |
 | **H** | Bocina |
 | **G** | Encender/apagar las luces |
 | **Mayús** | Bajarse |
@@ -62,7 +70,7 @@ Todas las teclas se cambian en **Opciones → Controles** (apartado *Vehicle Stu
 4. Ve a la pestaña **Actions**. La compilación empieza sola (o pulsa **Run workflow**). Tarda unos 5–10 minutos
    la primera vez porque descarga y prepara Minecraft.
 5. Cuando aparezca el círculo verde ✔, entra en la ejecución y descarga el artefacto
-   **VehicleStudio-NeoForge-1.21.1**. Dentro está el archivo `vehiclestudio-neoforge-1.21.1-1.0.0.jar`.
+   **VehicleStudio-NeoForge-1.21.1**. Dentro está el archivo `vehiclestudio-neoforge-1.21.1-1.1.0.jar`.
 
 Para compilar en tu PC: instala Java 21 y ejecuta `gradlew build` (Windows) o `./gradlew build` (Linux/Mac).
 El `.jar` queda en `build/libs/`.
@@ -100,7 +108,8 @@ Vehicle Studio es un mod aparte: puede ir junto a Creature Studio en la misma ca
 - **Guardar** lo sube al mundo. Después, en la biblioteca:
   - **Obtener vehículo**: te da el vehículo como objeto; úsalo sobre el suelo para colocarlo mirando hacia donde
     miras. En creativo es gratis; en **supervivencia cuesta lingotes de hierro**: 1 por cada bloque de carrocería
-    (16×16×16 píxeles), 1 por rueda y 1 por asiento, de 1 a 64 (el coche de la plantilla cuesta 13).
+    (16×16×16 píxeles), 1 por rueda, 1 por asiento, 2 por hélice o propulsor y 4 más si vuela, de 1 a 64 (el coche
+    de la plantilla cuesta 13).
   - **Colocar**: lo pone delante de ti (solo creativo u operadores).
   - **Exportar / Importar**: archivos `.json` en `.minecraft/vehiclestudio/` para compartirlos con amigos.
 - Los vehículos de cada mundo se guardan en `<carpeta del mundo>/vehiclestudio/*.json`.
@@ -133,6 +142,13 @@ src/main/resources/        Texturas, modelos, idiomas (es/en), receta y botín
 - **Gira demasiado poco o demasiado**: cambia **Giro de las ruedas** en **Conducción** o acerca/aleja las ruedas
   delanteras de las traseras. Sin ninguna rueda que «gire al doblar», el vehículo gira igual, como si las tuviera.
 - **No sube los bloques**: sube **Sube bloques (altura)** en **Conducción** (1 = un bloque entero).
+- **El avión no despega**: tiene que ir por el suelo al menos a la velocidad de despegue (la pestaña **Vuelo** la
+  muestra) y pulsar **Espacio**. Si no llega, sube la velocidad máxima en **Conducción**.
+- **No vuela**: en la pestaña **Vuelo** elige *Helicóptero* o *Avión* y añade al menos una hélice o un propulsor.
+- **El turbo no hace nada**: necesita al menos un propulsor y un turbo mayor que 0 %. Cuando la barra se vacía,
+  suelta **R** para que se recargue.
+- **La llama apunta hacia otro lado**: sale por la cara de atrás (+Z) del propulsor; gíralo en **Forma** (por
+  ejemplo 90° en X para que apunte hacia abajo).
 - **El morro de un vehículo largo se mete en las paredes**: la caja de choque de las entidades de Minecraft es
   cuadrada (del ancho del vehículo); en vehículos muy largos el frente y la cola pueden atravesar un poco los bloques.
 - **Los faros no iluminan el suelo**: brillan (se ven aunque sea de noche), pero Minecraft no tiene luces que se

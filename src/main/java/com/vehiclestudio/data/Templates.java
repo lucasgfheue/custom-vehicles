@@ -25,6 +25,10 @@ public final class Templates {
             new Template("tractor", Templates::tractor),
             new Template("buggy", Templates::buggy),
             new Template("cart", Templates::cart),
+            new Template("helicopter", Templates::helicopter),
+            new Template("plane", Templates::plane),
+            new Template("drone", Templates::drone),
+            new Template("rocket_car", Templates::rocketCar),
             new Template("empty", Templates::empty)
     );
 
@@ -320,6 +324,129 @@ public final class Templates {
         b.def.horn = HornSound.BELL;
         b.def.storage = 18;
         return b.named("Carreta");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Los que vuelan (y el coche con turbo)
+    // ---------------------------------------------------------------------------------------
+
+    private static final int ROTOR = 0x2A2A2E;
+    private static final int NAV_RED = 0xFF2A2A;
+    private static final int NAV_GREEN = 0x2AFF5A;
+
+    public static VehicleDefinition helicopter() {
+        Builder b = new Builder();
+        int body = 0x1F5FAF;
+        b.pair(VehiclePart.box("patin izquierdo", 8, 0, -22, 2, 1.5f, 44).colored(0x3A3A3A));
+        b.pair(VehiclePart.box("soporte delantero izquierdo", 8.5f, 1.5f, -14, 1, 5, 1.5f).colored(0x3A3A3A));
+        b.pair(VehiclePart.box("soporte trasero izquierdo", 8.5f, 1.5f, 8, 1, 5, 1.5f).colored(0x3A3A3A));
+        b.add(VehiclePart.box("suelo de la cabina", -10, 6.5f, -22, 20, 2, 34).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("morro", -10, 8.5f, -24, 20, 5, 4).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(b.glass("parabrisas", -9, 13.5f, -23, 18, 15, 1));
+        b.pair(b.glass("ventanilla izquierda", 9, 8.5f, -21, 1, 20, 19));
+        b.pair(VehiclePart.box("pilar delantero izquierdo", 9, 8.5f, -23, 1, 22, 2).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("motor", -10, 8.5f, -2, 20, 22, 14).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("techo", -10, 28.5f, -23, 20, 2, 21).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("cola", -2.5f, 20, 12, 5, 5, 34).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("aleta", -0.75f, 25, 40, 1.5f, 9, 6).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("estabilizador", -6, 20.5f, 40, 12, 1, 4).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("mastil", -1, 30.5f, -9, 2, 4, 2).textured(MaterialIds.METAL).colored(0x707070));
+        b.add(VehiclePart.propeller("rotor", PropAxis.TOP, 0, 35, -8, 48, 1, 2, ROTOR));
+        b.add(VehiclePart.propeller("rotor de cola", PropAxis.FRONT, 3.4f, 27, 44, 10, 0.8f, 2, ROTOR).rotated(0, 90, 0));
+        b.add(VehiclePart.seat("asiento del piloto", SeatStyle.CAR, 1.5f, 8.5f, -16, 7, 12, 7, SEAT_DARK, true));
+        b.add(VehiclePart.seat("asiento del copiloto", SeatStyle.CAR, -8.5f, 8.5f, -16, 7, 12, 7, SEAT_DARK, false));
+        b.add(VehiclePart.box("faro", -2, 7, -24.5f, 4, 2, 0.5f).light(LightMode.HEAD).colored(HEADLIGHT));
+        b.add(VehiclePart.box("luz de navegacion izquierda", 10, 14, -1, 0.5f, 1.5f, 1.5f).light(LightMode.ALWAYS).colored(NAV_RED));
+        b.add(VehiclePart.box("luz de navegacion derecha", -10.5f, 14, -1, 0.5f, 1.5f, 1.5f).light(LightMode.ALWAYS).colored(NAV_GREEN));
+        b.add(VehiclePart.box("luz de cola", -0.5f, 34, 45, 1, 1, 1).light(LightMode.ALWAYS).colored(0xFFFFFF));
+        b.stats(10, 3, 1.5f, 35, 10, 0.5f, 60);
+        b.def.flight = FlightMode.HELICOPTER;
+        b.def.airSpeed = 90;
+        b.def.climb = 5;
+        b.def.storage = 9;
+        return b.named("Helicoptero");
+    }
+
+    public static VehicleDefinition plane() {
+        Builder b = new Builder();
+        int body = 0xE8E8E8;
+        int stripe = 0xC0392B;
+        b.add(VehiclePart.box("fuselaje", -6, 8, -28, 12, 7, 56).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("capo", -6, 15, -28, 12, 5, 14).textured(MaterialIds.SMOOTH).colored(stripe));
+        b.add(VehiclePart.box("lomo", -6, 15, -2, 12, 5, 30).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(b.glass("parabrisas", -5, 20, -14, 10, 4, 1));
+        b.add(VehiclePart.box("cola", -4, 12, 28, 8, 8, 16).textured(MaterialIds.SMOOTH).colored(body));
+        b.add(VehiclePart.box("aleta", -0.75f, 20, 36, 1.5f, 10, 8).textured(MaterialIds.SMOOTH).colored(stripe));
+        b.add(VehiclePart.box("estabilizador", -14, 17, 38, 28, 1, 6).textured(MaterialIds.SMOOTH).colored(body));
+        b.pair(VehiclePart.box("ala izquierda", 6, 12, -12, 28, 2, 14).textured(MaterialIds.SMOOTH).colored(body));
+        b.pair(VehiclePart.box("franja del ala izquierda", 26, 14, -12, 6, 0.25f, 14).colored(stripe));
+        b.add(VehiclePart.box("buje", -1.5f, 13.5f, -31, 3, 3, 2).textured(MaterialIds.METAL).colored(stripe));
+        b.add(VehiclePart.propeller("helice", PropAxis.FRONT, 0, 15, -29.5f, 22, 1, 2, ROTOR));
+        b.add(VehiclePart.seat("asiento del piloto", SeatStyle.CAR, -3.5f, 8, -12, 7, 10, 8, SEAT_DARK, true));
+        b.add(VehiclePart.box("palanca", -2, 15, -13, 4, 4, 1).steering(SteeringStyle.WHEEL).colored(0x1E1E1E)
+                .rotated(15, 0, 0));
+        b.add(VehiclePart.wheel("rueda delantera", WheelPreset.KART, 0, -1, -20, true));
+        b.add(VehiclePart.box("pata delantera", -0.5f, 3, -20.5f, 1, 5, 1).colored(0x555555));
+        b.wheels("trasera", WheelPreset.CAR, 10, 4, false);
+        b.pair(VehiclePart.box("pata trasera izquierda", 9.5f, 5, 3.5f, 1, 7, 1).colored(0x555555));
+        b.add(VehiclePart.box("faro", -1.5f, 9, -28.5f, 3, 2, 0.5f).light(LightMode.HEAD).colored(HEADLIGHT));
+        b.add(VehiclePart.box("luz del ala izquierda", 33.5f, 12.5f, -6, 0.5f, 1, 1.5f).light(LightMode.ALWAYS).colored(NAV_RED));
+        b.add(VehiclePart.box("luz del ala derecha", -34, 12.5f, -6, 0.5f, 1, 1.5f).light(LightMode.ALWAYS).colored(NAV_GREEN));
+        b.add(VehiclePart.box("luz de cola", -0.5f, 30, 43, 1, 1, 1).light(LightMode.ALWAYS).colored(0xFFFFFF));
+        b.stats(60, 4, 2, 30, 5, 0.5f, 40);
+        b.def.flight = FlightMode.PLANE;
+        b.def.airSpeed = 120;
+        b.def.climb = 4;
+        return b.named("Avioneta");
+    }
+
+    public static VehicleDefinition drone() {
+        Builder b = new Builder();
+        int body = 0x2B2B30;
+        b.add(VehiclePart.box("cuerpo", -6, 4, -6, 12, 4, 12).textured(MaterialIds.CARBON).colored(body));
+        b.add(VehiclePart.box("brazo diagonal", -1, 6, -17, 2, 1.5f, 34).textured(MaterialIds.CARBON).colored(body)
+                .rotated(0, 45, 0));
+        b.add(VehiclePart.box("brazo diagonal cruzado", -1, 6, -17, 2, 1.5f, 34).textured(MaterialIds.CARBON).colored(body)
+                .rotated(0, -45, 0));
+        b.pair(VehiclePart.box("motor delantero izquierdo", 10.5f, 7, -13.5f, 3, 2.5f, 3).textured(MaterialIds.METAL).colored(0xB0B0B8));
+        b.pair(VehiclePart.box("motor trasero izquierdo", 10.5f, 7, 10.5f, 3, 2.5f, 3).textured(MaterialIds.METAL).colored(0xB0B0B8));
+        b.pair(VehiclePart.propeller("helice delantera izquierda", PropAxis.TOP, 12, 10, -12, 14, 0.6f, 2, 0xE0E0E0));
+        b.pair(VehiclePart.propeller("helice trasera izquierda", PropAxis.TOP, 12, 10, 12, 14, 0.6f, 2, 0xE0E0E0));
+        b.pair(VehiclePart.box("pata delantera izquierda", 4, 0, -5, 1, 4, 1).colored(0x555555));
+        b.pair(VehiclePart.box("pata trasera izquierda", 4, 0, 4, 1, 4, 1).colored(0x555555));
+        b.add(VehiclePart.seat("asiento", SeatStyle.SADDLE, -3, 8, -3, 6, 2, 6, 0x111111, true));
+        b.add(VehiclePart.box("luz delantera", -1, 5, -6.5f, 2, 1.5f, 0.5f).light(LightMode.HEAD).colored(HEADLIGHT));
+        b.add(VehiclePart.box("luz trasera", -1, 5, 6, 2, 1.5f, 0.5f).light(LightMode.BRAKE).colored(BRAKELIGHT));
+        b.stats(8, 2, 1, 40, 10, 0.5f, 20);
+        b.def.flight = FlightMode.HELICOPTER;
+        b.def.airSpeed = 70;
+        b.def.climb = 6;
+        b.def.engine = EngineSound.DRONE;
+        b.def.horn = HornSound.BIKE;
+        return b.named("Dron");
+    }
+
+    public static VehicleDefinition rocketCar() {
+        VehicleDefinition d = sports();
+        int purple = 0x7B2FBE;
+        for (VehiclePart p : d.parts) {
+            if (p.color == 0xF1C40F) {
+                p.color = purple;
+            }
+        }
+        d.parts.removeIf(p -> p.kind == PartKind.EXHAUST);
+        VehiclePart left = VehiclePart.thruster("propulsor izquierdo", ThrusterStyle.ROCKET, 3.5f, 9, 38, 7, 8, 0x3FA9FF);
+        d.parts.add(left);
+        d.parts.add(left.mirroredX());
+        d.parts.add(VehiclePart.box("soporte de los propulsores", -7, 6, 33.5f, 14, 6, 1).colored(0x1A1A1A));
+        d.maxSpeed = 100;
+        d.accelTime = 3;
+        d.turbo = 100;
+        d.turboTime = 3;
+        d.turboRecharge = 5;
+        d.engine = EngineSound.JET;
+        d.name = "Coche cohete";
+        return d;
     }
 
     public static VehicleDefinition empty() {

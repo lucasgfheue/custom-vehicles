@@ -45,11 +45,23 @@ public class VehicleRenderer extends EntityRenderer<CustomVehicle> {
             }
             float[] l = entity.layout(d);
             float k = l[3] / 16f;
+            // inclinado al volar (morro arriba o abajo y hacia los lados), alrededor del centro del vehiculo:
+            // lo mismo que VehicleGeometry.modelToWorld, para que los asientos coincidan
+            float pitch = entity.getPitchShown(partialTick);
+            float roll = entity.getRollShown(partialTick);
+            if (pitch != 0f || roll != 0f) {
+                float hc = l[4] / 2f * k;
+                poseStack.translate(0f, hc, 0f);
+                poseStack.mulPose(Axis.XP.rotationDegrees(pitch));
+                poseStack.mulPose(Axis.ZP.rotationDegrees(roll));
+                poseStack.translate(0f, -hc, 0f);
+            }
             // +X del modelo es la izquierda del vehiculo (como los modelos de Minecraft)
             poseStack.scale(-k, k, k);
             poseStack.translate(-l[0], -l[1], -l[2]);
             VehicleGeometry.Motion motion = new VehicleGeometry.Motion(entity.getRolled(partialTick),
-                    entity.getSteerShown(partialTick), entity.lightsOn(), entity.braking());
+                    entity.getSteerShown(partialTick), entity.lightsOn(), entity.braking(), entity.getSpin(partialTick),
+                    entity.getThrust(partialTick));
             Matrix4f[] mats = VehicleGeometry.pose(d, motion);
             VertexConsumer vc = buffer.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));
             VehicleModelRenderer.renderPosed(d, mats, poseStack.last(), vc, packedLight, OverlayTexture.NO_OVERLAY,

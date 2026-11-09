@@ -127,7 +127,7 @@ public final class ModNetwork {
     private static void onDriveInput(Payloads.DriveInput payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player && player.getVehicle() instanceof CustomVehicle v
                 && v.getControllingPassenger() == player) {
-            v.setDriverInput(payload.steer() / 100f, payload.braking());
+            v.setDriverInput(payload.steer() / 100f, payload.flags());
         }
     }
 

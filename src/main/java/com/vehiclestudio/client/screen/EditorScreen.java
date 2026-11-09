@@ -15,6 +15,9 @@ import com.vehiclestudio.data.EngineSound;
 import com.vehiclestudio.data.HornSound;
 import com.vehiclestudio.data.LightMode;
 import com.vehiclestudio.data.PartKind;
+import com.vehiclestudio.data.ThrusterStyle;
+import com.vehiclestudio.data.PropAxis;
+import com.vehiclestudio.data.FlightMode;
 import com.vehiclestudio.data.RimStyle;
 import com.vehiclestudio.data.SeatStyle;
 import com.vehiclestudio.data.SteeringStyle;
@@ -83,7 +86,8 @@ public class EditorScreen extends Screen {
         WHEELS("wheels"),
         SEATS("seats"),
         PAINT("paint"),
-        DRIVE("drive");
+        DRIVE("drive"),
+        FLIGHT("flight");
 
         private final String key;
         @Nullable
@@ -95,7 +99,7 @@ public class EditorScreen extends Screen {
 
         /** Pestanas que trabajan sobre la pieza seleccionada. */
         boolean usesPart() {
-            return this == PARTS || this == SHAPE || this == WHEELS || this == SEATS || this == PAINT;
+            return this == PARTS || this == SHAPE || this == WHEELS || this == SEATS || this == PAINT || this == FLIGHT;
         }
 
         MutableComponent title() {
@@ -116,6 +120,7 @@ public class EditorScreen extends Screen {
                     case SEATS -> Items.SADDLE;
                     case PAINT -> Items.BRUSH;
                     case DRIVE -> Items.COMPASS;
+                    case FLIGHT -> Items.ELYTRA;
                 });
             }
             return icon;
@@ -409,6 +414,7 @@ public class EditorScreen extends Screen {
             case SEATS -> buildSeatsTab(y);
             case PAINT -> buildPaintTab(y);
             case DRIVE -> buildDriveTab(y);
+            case FLIGHT -> buildFlightTab(y);
         };
         contentHeight = bottom + PAD;
         setScroll(scroll());
@@ -709,10 +715,18 @@ public class EditorScreen extends Screen {
             warn(Ui.tr("editor.too_many_wheels", VehicleDefinition.MAX_WHEELS));
             return;
         }
+        if (kind.propels() && !p.kind.propels() && propulsionCount() >= VehicleDefinition.MAX_PROPULSION) {
+            warn(Ui.tr("editor.too_many_propulsion", VehicleDefinition.MAX_PROPULSION));
+            return;
+        }
         p.kind = kind;
         if (kind == PartKind.WHEEL) {
             p.centerPivot();
             p.material = MaterialIds.SOLID;
+        }
+        if (kind == PartKind.PROPELLER) {
+            p.centerPivot();
+            p.propAxis = p.h < Math.min(p.w, p.d) ? PropAxis.TOP : PropAxis.FRONT;
         }
         if (kind == PartKind.SEAT && def.countKind(PartKind.SEAT) == 1) {
             p.driver = true;
@@ -955,6 +969,127 @@ public class EditorScreen extends Screen {
         y += 14;
         y = section(y, Ui.tr("drive.controls"));
         return text(y, Ui.tr("drive.controls_text"), HINT);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Vuelo: helices, propulsores, vuelo y turbo
+    // ---------------------------------------------------------------------------------------
+
+    private int propulsionCount() {
+        return def.countKind(PartKind.PROPELLER) + def.countKind(PartKind.THRUSTER);
+    }
+
+    private int buildFlightTab(int y) {
+        y = intro(y);
+        y = section(y, Ui.tr("flight.parts"));
+        add(new TextLine(0, y, () -> Ui.tr("flight.count", def.countKind(PartKind.PROPELLER),
+                def.countKind(PartKind.THRUSTER)), Ui.MUTED));
+        y += 13;
+        int half = (contentW - GAP) / 2;
+        button(0, y, half, Ui.tr("kind.add.propeller"), b -> addPart(PartKind.PROPELLER), Ui.tr("kind.propeller.tip"));
+        button(half + GAP, y, contentW - half - GAP, Ui.tr("kind.add.thruster"), b -> addPart(PartKind.THRUSTER),
+                Ui.tr("kind.thruster.tip"));
+        y += ROW + 4;
+        VehiclePart p = sel();
+        if (p != null && p.kind == PartKind.PROPELLER) {
+            y = pieceSelector(y);
+            y = buildPropeller(y, p);
+        } else if (p != null && p.kind == PartKind.THRUSTER) {
+            y = pieceSelector(y);
+            y = buildThruster(y, p);
+        } else if (propulsionCount() > 0) {
+            y = text(y, Ui.tr("flight.pick"), Ui.TEXT) + 6;
+            int firstProp = firstOf(PartKind.PROPELLER);
+            int firstThr = firstOf(PartKind.THRUSTER);
+            if (firstProp >= 0 && firstThr >= 0) {
+                button(0, y, half, Ui.tr("kind.select.propeller"), b -> select(firstOf(PartKind.PROPELLER)), null);
+                button(half + GAP, y, contentW - half - GAP, Ui.tr("kind.select.thruster"),
+                        b -> select(firstOf(PartKind.THRUSTER)), null);
+            } else {
+                PartKind k = firstProp >= 0 ? PartKind.PROPELLER : PartKind.THRUSTER;
+                button(0, y, contentW, Ui.tr("kind.select." + k.key()), b -> select(firstOf(k)), null);
+            }
+            y += ROW + 6;
+        } else {
+            y = text(y, Ui.tr("flight.none"), HINT) + 6;
+        }
+
+        y = section(y, Ui.tr("flight.section"));
+        y = chips(y, FlightMode.values(), 3, () -> def.flight, v -> {
+            def.flight = v;
+            requestRebuild();
+        }, v -> Ui.tr("flight_mode." + v.key()), v -> Ui.tr("flight_mode." + v.key() + ".tip")) + 4;
+        if (def.flight != FlightMode.NONE) {
+            if (propulsionCount() == 0) {
+                y = text(y, Ui.tr("flight.need_parts"), WARN) + 4;
+            }
+            y = numField(y, "flight.air_speed", () -> def.airSpeed, v -> def.airSpeed = v, 5f,
+                    VehicleDefinition.MAX_AIR_SPEED, 5f, true);
+            y = numField(y, "flight.climb", () -> def.climb, v -> def.climb = v, 0.5f, 20f, 0.5f, false);
+            if (def.flight == FlightMode.PLANE) {
+                add(new TextLine(0, y, () -> Ui.tr("flight.takeoff", Math.round(def.takeoffSpeed())), HINT));
+                y += 13;
+            }
+            y = text(y, Ui.tr(def.flight == FlightMode.PLANE ? "flight.plane_hint" : "flight.heli_hint"), HINT) + 6;
+        }
+
+        y = section(y, Ui.tr("turbo.section"));
+        y = numField(y, "turbo.boost", () -> def.turbo, v -> def.turbo = v, 0f, VehicleDefinition.MAX_TURBO, 10f, true);
+        y = numField(y, "turbo.time", () -> def.turboTime, v -> def.turboTime = v, 0.5f, 20f, 0.5f, false);
+        y = numField(y, "turbo.recharge", () -> def.turboRecharge, v -> def.turboRecharge = v, 0f, 60f, 1f, false);
+        add(new TextLine(0, y, () -> def.turbo > 0f && def.countKind(PartKind.THRUSTER) == 0
+                ? Ui.tr("turbo.need_thruster") : Component.empty(), WARN));
+        y += 13;
+        y = text(y, Ui.tr("turbo.hint"), HINT) + 6;
+        add(new TextLine(0, y, () -> Ui.tr("drive.cost", def.ironCost()), Ui.ACCENT));
+        y += 14;
+        y = section(y, Ui.tr("drive.controls"));
+        return text(y, Ui.tr("flight.controls_text"), HINT);
+    }
+
+    private int buildPropeller(int y, VehiclePart p) {
+        y = section(y, Ui.tr("propeller.section"));
+        y = smallLabel(y, Ui.tr("propeller.axis"));
+        y = chips(y, PropAxis.values(), 2, () -> p.propAxis, v -> VehicleParts.setPropAxis(p, v),
+                v -> Ui.tr("prop_axis." + v.key()), v -> Ui.tr("prop_axis." + v.key() + ".tip")) + 4;
+        y = numField(y, "propeller.blades", () -> (float) p.blades, v -> p.blades = Math.round(v), 2f, 8f, 1f, true);
+        y = numField(y, "propeller.diameter", () -> p.propRadius() * 2f, v -> setPropDiameter(p, v), 2f, 128f, 1f,
+                false);
+        y = section(y, Ui.tr("propeller.blade_color"));
+        y = colorRows(y, () -> p.color, c -> p.color = c);
+        y = section(y, Ui.tr("propeller.hub_color"));
+        y = colorRows(y, () -> p.rimColor, c -> p.rimColor = c);
+        return text(y, Ui.tr("propeller.hint"), HINT) + 8;
+    }
+
+    /** Cambia el diametro de una helice sin mover su centro. */
+    private void setPropDiameter(VehiclePart p, float diameter) {
+        float cx = p.x + p.w / 2f;
+        float cy = p.y + p.h / 2f;
+        float cz = p.z + p.d / 2f;
+        p.w = diameter;
+        if (p.propAxis == PropAxis.TOP) {
+            p.d = diameter;
+        } else {
+            p.h = diameter;
+        }
+        p.x = cx - p.w / 2f;
+        p.y = cy - p.h / 2f;
+        p.z = cz - p.d / 2f;
+        p.centerPivot();
+    }
+
+    private int buildThruster(int y, VehiclePart p) {
+        y = section(y, Ui.tr("thruster.section"));
+        y = smallLabel(y, Ui.tr("thruster.style"));
+        y = chips(y, ThrusterStyle.values(), 3, () -> p.thrusterStyle, v -> p.thrusterStyle = v,
+                v -> Ui.tr("thruster_style." + v.key()), v -> Ui.tr("thruster_style." + v.key() + ".tip")) + 4;
+        y = numField(y, "thruster.flame_size", () -> p.flameSize, v -> p.flameSize = v, 0.3f, 3f, 0.1f, false);
+        y = section(y, Ui.tr("thruster.flame_color"));
+        y = colorRows(y, () -> p.flameColor, c -> p.flameColor = c);
+        y = section(y, Ui.tr("thruster.body_color"));
+        y = colorRows(y, () -> p.color, c -> p.color = c);
+        return text(y, Ui.tr("thruster.hint"), HINT) + 8;
     }
 
     private int buildPaintTab(int y) {
@@ -1728,6 +1863,10 @@ public class EditorScreen extends Screen {
             warn(Ui.tr("editor.too_many_seats", VehicleDefinition.MAX_SEATS));
             return;
         }
+        if (kind.propels() && propulsionCount() >= VehicleDefinition.MAX_PROPULSION) {
+            warn(Ui.tr("editor.too_many_propulsion", VehicleDefinition.MAX_PROPULSION));
+            return;
+        }
         if (kind != PartKind.BODY) {
             def.parts.add(VehicleParts.create(def, kind));
             selected = def.parts.size() - 1;
@@ -2165,7 +2304,9 @@ public class EditorScreen extends Screen {
         float t = (Util.getMillis() % 3_600_000L) / 50f;
         float steer = Mth.sin(t * 0.05f);
         boolean braking = Mth.sin(t * 0.05f + 1.2f) > 0.6f;
-        return new VehicleGeometry.Motion(t * 0.15f, steer, lights, braking);
+        // helices girando y llamas que crecen y menguan (como con el turbo a ratos)
+        float thrust = 1f + 0.8f * Math.max(0f, Mth.sin(t * 0.04f)) + 0.08f * Mth.sin(t * 1.7f);
+        return new VehicleGeometry.Motion(t * 0.15f, steer, lights, braking, t * 1.6f, thrust);
     }
 
     // =======================================================================================

@@ -120,14 +120,14 @@ public final class Payloads {
     }
 
     /**
-     * Lo que hace el conductor (para que los demas vean girar las ruedas y encenderse las luces de freno):
-     * steer de -100 (derecha) a 100 (izquierda); braking = frenando.
+     * Lo que hace el conductor (para que los demas vean girar las ruedas, las luces de freno, las llamas y las
+     * helices): steer de -100 (derecha) a 100 (izquierda); flags = CustomVehicle.FLAG_* (freno, turbo, gas, vuelo).
      */
-    public record DriveInput(int steer, boolean braking) implements CustomPacketPayload {
+    public record DriveInput(int steer, int flags) implements CustomPacketPayload {
         public static final Type<DriveInput> TYPE = typeOf("drive_input");
         public static final StreamCodec<ByteBuf, DriveInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, DriveInput::steer,
-                ByteBufCodecs.BOOL, DriveInput::braking,
+                ByteBufCodecs.VAR_INT, DriveInput::flags,
                 DriveInput::new);
 
         @Override

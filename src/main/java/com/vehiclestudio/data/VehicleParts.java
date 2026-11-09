@@ -84,10 +84,45 @@ public final class VehicleParts {
             case EXHAUST -> {
                 return VehiclePart.box("escape", -1, 4, back, 2, 2, 3).as(PartKind.EXHAUST).colored(0x555555);
             }
+            case PROPELLER -> {
+                // la primera, encima (como un helicoptero); las siguientes, delante (como una avioneta)
+                float length = back - front;
+                if (def.countKind(PartKind.PROPELLER) == 0) {
+                    float diameter = Math.max(16f, Math.min(64f, length * 0.9f));
+                    return VehiclePart.propeller("helice", PropAxis.TOP, 0, b[4] + 1.5f, (front + back) / 2f, diameter, 1f,
+                            2, 0x2E2E32);
+                }
+                float diameter = Math.max(8f, Math.min(24f, (b[4] - b[1]) * 0.9f));
+                return VehiclePart.propeller("helice delantera", PropAxis.FRONT, 0, b[1] + (b[4] - b[1]) / 2f,
+                        front - 1f, diameter, 1f, 3, 0x2E2E32);
+            }
+            case THRUSTER -> {
+                float size = Math.max(4f, Math.min(10f, (b[4] - b[1]) * 0.45f));
+                return VehiclePart.thruster("propulsor", ThrusterStyle.JET, 0, b[1] + (b[4] - b[1]) * 0.45f,
+                        back + 4f, size, 8f, 0xFF8A1E);
+            }
             default -> {
                 return VehiclePart.box("cubo", -4, 8, -4, 8, 8, 8).textured(MaterialIds.SMOOTH).colored(0xE6E6E6);
             }
         }
+    }
+
+    /** Cambia hacia donde mira una helice sin moverla: el disco pasa de estar de frente a tumbado o al reves. */
+    public static void setPropAxis(VehiclePart p, PropAxis axis) {
+        if (p.propAxis == axis) {
+            return;
+        }
+        float cx = p.x + p.w / 2f;
+        float cy = p.y + p.h / 2f;
+        float cz = p.z + p.d / 2f;
+        float oldH = p.h;
+        p.h = p.d;
+        p.d = oldH;
+        p.x = cx - p.w / 2f;
+        p.y = cy - p.h / 2f;
+        p.z = cz - p.d / 2f;
+        p.centerPivot();
+        p.propAxis = axis;
     }
 
     private static boolean wheelNear(VehicleDefinition def, float cx, float cz) {

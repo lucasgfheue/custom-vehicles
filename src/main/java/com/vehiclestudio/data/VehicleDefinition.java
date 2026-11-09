@@ -24,6 +24,12 @@ public class VehicleDefinition {
     /** Huecos que puede tener el maletero (filas de un cofre). */
     public static final int[] STORAGE_SIZES = {0, 9, 18, 27, 36, 45, 54};
     public static final float MAX_SPEED = 150f;
+    /** Velocidad maxima en el aire (km/h). */
+    public static final float MAX_AIR_SPEED = 200f;
+    /** Turbo maximo (% extra sobre la velocidad maxima). */
+    public static final float MAX_TURBO = 150f;
+    /** Helices y propulsores (juntos) por vehiculo. */
+    public static final int MAX_PROPULSION = 16;
 
     /** Tamano de la textura (skin) en la que estan las piezas con {@code uvU >= 0}; 0 si no hay. */
     public int texW;
@@ -61,6 +67,21 @@ public class VehicleDefinition {
     public int storage = 0;
     public HornSound horn = HornSound.CAR;
     public EngineSound engine = EngineSound.MOTOR;
+
+    // --- Vuelo (necesita al menos una helice o un propulsor) ---
+    public FlightMode flight = FlightMode.NONE;
+    /** Velocidad maxima en el aire (km/h). */
+    public float airSpeed = 80f;
+    /** Lo rapido que sube y baja (bloques por segundo). */
+    public float climb = 5f;
+
+    // --- Turbo (necesita al menos un propulsor; tecla R) ---
+    /** Velocidad extra con el turbo (% de la maxima); 0 = sin turbo. */
+    public float turbo = 0f;
+    /** Segundos que dura el turbo con el deposito lleno. */
+    public float turboTime = 3f;
+    /** Segundos que tarda en llenarse otra vez. */
+    public float turboRecharge = 6f;
 
     // --- Modelo ---
     public List<VehiclePart> parts = new ArrayList<>();
@@ -158,13 +179,32 @@ public class VehicleDefinition {
         for (VehiclePart p : parts) {
             switch (p.kind) {
                 case WHEEL, SEAT -> extra++;
+                case PROPELLER, THRUSTER -> extra += 2;
                 default -> volume += (double) p.w * p.h * p.d;
             }
             volume += Voxels.count(p.voxels);
         }
+        if (canFly()) {
+            extra += 4;
+        }
         double blocks = volume / 4096.0 * scale * scale * scale;
         long cost = (long) Math.ceil(blocks) + extra;
         return (int) Math.max(1, Math.min(64, cost));
+    }
+
+    /** true si vuela: tiene modo de vuelo y al menos una helice o un propulsor. */
+    public boolean canFly() {
+        return flight != FlightMode.NONE && (countKind(PartKind.PROPELLER) + countKind(PartKind.THRUSTER)) > 0;
+    }
+
+    /** true si tiene turbo: algo de turbo y al menos un propulsor. */
+    public boolean hasTurbo() {
+        return turbo > 0f && countKind(PartKind.THRUSTER) > 0;
+    }
+
+    /** Velocidad a la que despega un avion (km/h): el 40 % de la del aire, sin pasar del 90 % de la de tierra. */
+    public float takeoffSpeed() {
+        return Math.min(airSpeed * 0.4f, maxSpeed * 0.9f);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -280,6 +320,12 @@ public class VehicleDefinition {
         storage = best;
         if (horn == null) horn = HornSound.CAR;
         if (engine == null) engine = EngineSound.MOTOR;
+        if (flight == null) flight = FlightMode.NONE;
+        airSpeed = clamp(airSpeed, 5f, MAX_AIR_SPEED);
+        climb = clamp(climb, 0.5f, 20f);
+        turbo = clamp(turbo, 0f, MAX_TURBO);
+        turboTime = clamp(turboTime, 0.5f, 20f);
+        turboRecharge = clamp(turboRecharge, 0f, 60f);
 
         if (parts == null) {
             parts = new ArrayList<>();
@@ -291,6 +337,7 @@ public class VehicleDefinition {
         int n = parts.size();
         int wheels = 0;
         int seats = 0;
+        int propulsion = 0;
         boolean driver = false;
         for (int i = 0; i < n; i++) {
             VehiclePart p = parts.get(i);
@@ -322,16 +369,25 @@ public class VehicleDefinition {
             if (p.seatStyle == null) p.seatStyle = SeatStyle.CAR;
             if (p.steeringStyle == null) p.steeringStyle = SteeringStyle.WHEEL;
             if (p.lightMode == null) p.lightMode = LightMode.HEAD;
+            if (p.propAxis == null) p.propAxis = PropAxis.FRONT;
+            if (p.thrusterStyle == null) p.thrusterStyle = ThrusterStyle.JET;
+            p.blades = clampInt(p.blades, 2, 8);
+            p.flameColor &= 0xFFFFFF;
+            p.flameSize = clamp(p.flameSize, 0.3f, 3f);
             p.rimSize = clamp(p.rimSize, 0.3f, 0.95f);
+            if (p.kind.propels() && ++propulsion > MAX_PROPULSION) {
+                p.kind = PartKind.BODY;
+            }
             if (p.kind == PartKind.WHEEL && ++wheels > MAX_WHEELS) {
                 p.kind = PartKind.BODY;
             }
             if (p.kind == PartKind.SEAT && ++seats > MAX_SEATS) {
                 p.kind = PartKind.BODY;
             }
-            if (p.kind == PartKind.WHEEL) {
-                p.centerPivot(); // las ruedas giran sobre su centro
-            } else {
+            if (p.kind == PartKind.WHEEL || p.kind == PartKind.PROPELLER) {
+                p.centerPivot(); // las ruedas y las helices giran sobre su centro
+            }
+            if (p.kind != PartKind.WHEEL) {
                 p.steers = false;
             }
             if (p.kind == PartKind.SEAT && p.driver) {

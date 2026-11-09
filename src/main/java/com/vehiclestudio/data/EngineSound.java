@@ -8,7 +8,11 @@ public enum EngineSound {
     /** Motor: el traqueteo de las vagonetas, mas agudo cuanto mas rapido. */
     MOTOR("minecraft:entity.minecart.riding"),
     /** Electrico: zumbido suave. */
-    ELECTRIC("minecraft:block.beacon.ambient");
+    ELECTRIC("minecraft:block.beacon.ambient"),
+    /** Dron: zumbido de abeja, como unas helices pequenas. */
+    DRONE("minecraft:entity.bee.loop"),
+    /** Reactor: el viento de volar con elitros. */
+    JET("minecraft:item.elytra.flying");
 
     private final String sound;
 
