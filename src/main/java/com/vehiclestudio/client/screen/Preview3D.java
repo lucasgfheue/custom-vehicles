@@ -44,6 +44,8 @@ public class Preview3D {
     /** Contorno de un hueco de minibloque que se dibuja encima del modelo (pieza -1 = ninguno). */
     public int cursorPart = -1;
     public int cursorPos;
+    /** Tamano del hueco (ver Voxels). */
+    public int cursorSize;
     public int cursorColor;
 
     public void setArea(int x, int y, int w, int h) {
@@ -234,7 +236,7 @@ public class Preview3D {
         }
         if (cursorPart >= 0 && cursorPart < def.parts.size() && cursorPart < mats.length) {
             VehicleModelRenderer.renderVoxelCursor(mats[cursorPart], pose, vc, def.parts.get(cursorPart), cursorPos,
-                    cursorColor, thickness);
+                    cursorSize, cursorColor, thickness);
         }
         g.flush();
         ps.popPose();
@@ -315,16 +317,17 @@ public class Preview3D {
                 if (ignore != null && ignore.contains(voxelKey(i, pos))) {
                     continue;
                 }
-                float x0 = p.x + Voxels.x(pos);
-                float y0 = p.y + Voxels.y(pos);
-                float z0 = p.z + Voxels.z(pos);
-                float tv = rayBox(a, b, x0, y0, z0, x0 + 1f, y0 + 1f, z0 + 1f);
+                float side = Voxels.pixels(Voxels.sizeOf(vox[k + 1]));
+                float x0 = p.x + Voxels.px(pos);
+                float y0 = p.y + Voxels.py(pos);
+                float z0 = p.z + Voxels.pz(pos);
+                float tv = rayBox(a, b, x0, y0, z0, x0 + side, y0 + side, z0 + side);
                 if (tv >= 0f && tv < best) {
                     best = tv;
                     float hx = a.x + (b.x - a.x) * tv;
                     float hy = a.y + (b.y - a.y) * tv;
                     float hz = a.z + (b.z - a.z) * tv;
-                    int face = PaintLayout.faceAt(hx, hy, hz, x0, y0, z0, x0 + 1f, y0 + 1f, z0 + 1f);
+                    int face = PaintLayout.faceAt(hx, hy, hz, x0, y0, z0, x0 + side, y0 + side, z0 + side);
                     bestHit = new Hit(i, face, hx, hy, hz, pos);
                 }
             }

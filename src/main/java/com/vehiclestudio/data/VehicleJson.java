@@ -140,7 +140,12 @@ public final class VehicleJson {
                 j.addProperty("paint", encodePaint(p.paint));
             }
             if (Voxels.count(p.voxels) > 0) {
-                j.addProperty("voxels", Voxels.encode(p.voxels));
+                // sin tamanos, como antes (lo siguen abriendo versiones anteriores); con tamanos, en "voxels2"
+                if (Voxels.legacy(p.voxels)) {
+                    j.addProperty("voxels", Voxels.encodeLegacy(p.voxels));
+                } else {
+                    j.addProperty("voxels2", Voxels.encode(p.voxels));
+                }
             }
             parts.add(j);
         }
@@ -264,8 +269,10 @@ public final class VehicleJson {
                 }
                 readPaint(j, p);
                 readUv(j, p);
-                if (j.has("voxels") && j.get("voxels").isJsonPrimitive()) {
-                    p.voxels = Voxels.decode(j.get("voxels").getAsString());
+                if (j.has("voxels2") && j.get("voxels2").isJsonPrimitive()) {
+                    p.voxels = Voxels.decode(j.get("voxels2").getAsString());
+                } else if (j.has("voxels") && j.get("voxels").isJsonPrimitive()) {
+                    p.voxels = Voxels.decodeLegacy(j.get("voxels").getAsString());
                 }
                 d.parts.add(p);
             }

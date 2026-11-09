@@ -182,7 +182,7 @@ public class VehicleDefinition {
                 case PROPELLER, THRUSTER -> extra += 2;
                 default -> volume += (double) p.w * p.h * p.d;
             }
-            volume += Voxels.count(p.voxels);
+            volume += Voxels.volume(p.voxels);
         }
         if (canFly()) {
             extra += 4;
@@ -234,12 +234,13 @@ public class VehicleDefinition {
             if (Voxels.count(p.voxels) > 0) {
                 for (int k = 0; k + 1 < p.voxels.length; k += 2) {
                     int pos = p.voxels[k];
-                    bx0 = Math.min(bx0, p.x + Voxels.x(pos));
-                    by0 = Math.min(by0, p.y + Voxels.y(pos));
-                    bz0 = Math.min(bz0, p.z + Voxels.z(pos));
-                    bx1 = Math.max(bx1, p.x + Voxels.x(pos) + 1);
-                    by1 = Math.max(by1, p.y + Voxels.y(pos) + 1);
-                    bz1 = Math.max(bz1, p.z + Voxels.z(pos) + 1);
+                    float s = Voxels.pixels(Voxels.sizeOf(p.voxels[k + 1]));
+                    bx0 = Math.min(bx0, p.x + Voxels.px(pos));
+                    by0 = Math.min(by0, p.y + Voxels.py(pos));
+                    bz0 = Math.min(bz0, p.z + Voxels.pz(pos));
+                    bx1 = Math.max(bx1, p.x + Voxels.px(pos) + s);
+                    by1 = Math.max(by1, p.y + Voxels.py(pos) + s);
+                    bz1 = Math.max(bz1, p.z + Voxels.pz(pos) + s);
                 }
             }
             for (int c = 0; c < 8; c++) {

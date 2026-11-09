@@ -18,7 +18,7 @@ ratón acerca hacia donde está el cursor.
 | **Forma** | Posición, tamaño, pivote y giro en X/Y/Z (16 píxeles = 1 bloque), también con el ratón. |
 | **Ruedas** | **10 ruedas de referencia** (coche, deportiva, camión, todoterreno, moto, bicicleta, tractor, carreta, kart y monster truck) que se ponen con un clic sin mover la rueda de sitio. Después se edita todo: diámetro, ancho, si **gira al doblar**, color y dibujo de la goma (lisa, bloques, tacos, tractor), color, forma (disco, tapacubos, 5 radios, estrella, bicicleta, madera) y tamaño de la llanta. Botones **Igual en todas las ruedas** y **Poner 4 ruedas**. |
 | **Asientos** | Hasta 12 asientos con 6 estilos (de coche, banco, sillín, de carreras, silla e invisible) y cuál es el del **conductor**. |
-| **Pintar** | Color y más de 50 texturas (metal, fibra de carbono, chapa estriada, rejilla, cuadros, cuero, faro, cristal...), pintura píxel a píxel con pincel, goma y gotero, **minibloques** para los detalles y skins PNG (importar/exportar). |
+| **Pintar** | Color y más de 50 texturas (metal, fibra de carbono, chapa estriada, rejilla, cuadros, cuero, faro, cristal...), pintura píxel a píxel con pincel, goma y gotero, **minibloques** para los detalles (de 1/4, 1/2, 1, 2 o 4 píxeles, mezclados como quieras) y skins PNG (importar/exportar). |
 | **Vuelo** | **Hélices** (mirando hacia delante como una avioneta o hacia arriba como un helicóptero; de 2 a 8 palas, diámetro y colores) y **propulsores** (turbina, cohete o tobera, con llama del color y el largo que quieras). **Vuela**: no, como un **helicóptero** (sube, baja y se queda quieto en el aire) o como un **avión** (necesita velocidad para despegar y para no caer), con su velocidad en el aire y lo rápido que sube. **Turbo** (tecla R): velocidad extra, cuánto dura y cuánto tarda en recargarse. |
 | **Conducción** | Velocidad máxima (hasta 150 km/h), aceleración, frenos, marcha atrás, giro de las ruedas, derrape, cuánto sube (bloques), vida, escala, si **atropella** a los mobs, **maletero** (de 9 a 54 huecos), **bocina** (coche, camión, campana, bici, payaso, vaca) y sonido del motor (normal, eléctrico o ninguno). Muestra lo que cuesta en hierro. |
 
@@ -79,7 +79,7 @@ Todas las teclas se cambian en **Opciones → Controles** (apartado *Vehicle Stu
 4. Ve a la pestaña **Actions**. La compilación empieza sola (o pulsa **Run workflow**). Tarda unos 5–10 minutos
    la primera vez porque descarga y prepara Minecraft.
 5. Cuando aparezca el círculo verde ✔, entra en la ejecución y descarga el artefacto
-   **VehicleStudio-NeoForge-1.21.1**. Dentro está el archivo `vehiclestudio-neoforge-1.21.1-1.2.0.jar`.
+   **VehicleStudio-NeoForge-1.21.1**. Dentro está el archivo `vehiclestudio-neoforge-1.21.1-1.3.0.jar`.
 
 Para compilar en tu PC: instala Java 21 y ejecuta `gradlew build` (Windows) o `./gradlew build` (Linux/Mac).
 El `.jar` queda en `build/libs/`.
@@ -162,6 +162,8 @@ src/main/resources/        Texturas, modelos, idiomas (es/en), receta y botín
   otra que se mueve (tampoco con las barcas); el vehículo te empuja. Para viajar, siéntate en un asiento.
 - **Me paro un poco antes de una pared que va en diagonal**: Minecraft solo tiene cajas de choque rectas; cuando una
   pieza está girada, se cubre con cajas pequeñas que sobresalen un poquito (unos píxeles) de la pieza.
+- **«Máximo 6000 minibloques por vehículo»**: es el límite. Los pequeños gastan muchos (para cubrir lo mismo, los de
+  1/4 de píxel necesitan 16 veces más que los de 1 píxel): úsalos para los detalles y los de 1, 2 o 4 para lo grande.
 - **Atravieso una pieza**: mira en **Piezas** que tenga marcado **Sólida**. Los **minibloques** son decoración y no
   chocan.
 - **Los faros no iluminan el suelo**: brillan (se ven aunque sea de noche), pero Minecraft no tiene luces que se

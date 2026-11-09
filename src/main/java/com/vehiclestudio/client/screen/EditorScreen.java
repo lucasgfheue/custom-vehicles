@@ -288,6 +288,8 @@ public class EditorScreen extends Screen {
     private boolean voxelMirror = true;
     /** Minibloques: el pincel cambia el color de los que ya hay en vez de poner nuevos. */
     private boolean voxelRecolor;
+    /** Tamano de los minibloques que se ponen (ver Voxels.SIZE_KEYS). */
+    private int voxelSize = Voxels.DEFAULT_SIZE;
     /** Minibloques puestos en el trazo actual (no cuentan al apuntar, asi se pinta una capa). */
     private final java.util.Set<Long> strokeVoxels = new java.util.HashSet<>();
     private double paintLastX;
@@ -1220,6 +1222,9 @@ public class EditorScreen extends Screen {
         y = smallLabel(y, Ui.tr("voxel.brush_does"));
         y = chips(y, NO_YES, 2, () -> voxelRecolor, v -> voxelRecolor = v,
                 v -> Ui.tr(v ? "voxel.recolor" : "voxel.place"), v -> Ui.tr(v ? "voxel.recolor_tip" : "voxel.place_tip")) + 4;
+        y = smallLabel(y, Ui.tr("voxel.size"));
+        y = chips(y, Voxels.SIZE_ORDER, Voxels.SIZE_ORDER.length, () -> voxelSize, v -> voxelSize = v,
+                v -> Ui.tr("voxel.size." + Voxels.SIZE_KEYS[v]), v -> Ui.tr("voxel.size." + Voxels.SIZE_KEYS[v] + ".tip")) + 4;
         add(new Toggle(0, y, contentW, Ui.tr("voxel.mirror"), () -> voxelMirror, v -> voxelMirror = v,
                 Ui.tr("voxel.mirror_tip"), false));
         y += CHIP_H + 6;
@@ -1256,8 +1261,8 @@ public class EditorScreen extends Screen {
         return text(y, Ui.tr("voxel.hint"), HINT) + 10;
     }
 
-    /** Hueco de minibloque: pieza a la que se pega y posicion empaquetada. */
-    private record VoxelTarget(int part, int pos) {
+    /** Hueco de minibloque: pieza a la que se pega, posicion empaquetada y tamano. */
+    private record VoxelTarget(int part, int pos, int size) {
     }
 
     /** Lo que hay bajo el raton para la herramienta: el hueco donde poner o el minibloque que borrar/pintar. */
@@ -1268,39 +1273,17 @@ public class EditorScreen extends Screen {
         if (hit == null || hit.part() >= def.parts.size()) {
             return null;
         }
+        VehiclePart p = def.parts.get(hit.part());
+        int index = hit.isVoxel() ? Voxels.indexOf(p.voxels, hit.voxel()) : -1;
         if (existing) {
-            return hit.isVoxel() ? new VoxelTarget(hit.part(), hit.voxel()) : null;
+            return index >= 0 ? new VoxelTarget(hit.part(), hit.voxel(), Voxels.sizeAt(p.voxels, index)) : null;
         }
-        if (hit.face() < 0) {
+        if (hit.face() < 0 || hit.isVoxel() && index < 0) {
             return null;
         }
-        int[] n = Voxels.NORMALS[hit.face()];
-        VehiclePart p = def.parts.get(hit.part());
-        int x;
-        int y;
-        int z;
-        if (hit.isVoxel()) {
-            x = Voxels.x(hit.voxel()) + n[0];
-            y = Voxels.y(hit.voxel()) + n[1];
-            z = Voxels.z(hit.voxel()) + n[2];
-        } else {
-            x = cell(hit.x() - p.x, p.w, n[0]);
-            y = cell(hit.y() - p.y, p.h, n[1]);
-            z = cell(hit.z() - p.z, p.d, n[2]);
-        }
-        return Voxels.inRange(x, y, z) ? new VoxelTarget(hit.part(), Voxels.pack(x, y, z)) : null;
-    }
-
-    /** Coordenada del hueco pegado a la cara de la caja: fuera de la cara en su eje, la celda del punto en los otros. */
-    private static int cell(float r, float size, int normal) {
-        int cells = Math.max(1, (int) Math.ceil(size - 1.0e-3f));
-        if (normal > 0) {
-            return cells;
-        }
-        if (normal < 0) {
-            return -1;
-        }
-        return Mth.clamp((int) Math.floor(r), 0, cells - 1);
+        int pos = Voxels.beside(p.w, p.h, p.d, hit.face(), hit.x() - p.x, hit.y() - p.y, hit.z() - p.z,
+                index >= 0 ? hit.voxel() : -1, index >= 0 ? Voxels.sizeAt(p.voxels, index) : 0, voxelSize);
+        return pos < 0 ? null : new VoxelTarget(hit.part(), pos, voxelSize);
     }
 
     /** El mismo hueco al otro lado (en la misma pieza si esta centrada, o en su pareja). null si no tiene. */
@@ -1317,14 +1300,14 @@ public class EditorScreen extends Screen {
             }
         }
         VehiclePart q = def.parts.get(qi);
-        float fx = -(p.x + Voxels.x(t.pos()) + 1f) - q.x;
+        float fx = (-(p.x + Voxels.px(t.pos()) + Voxels.pixels(t.size())) - q.x) * Voxels.UNIT;
         int x = Math.round(fx);
-        if (Math.abs(fx - x) > 0.05f) {
+        if (Math.abs(fx - x) > 0.2f) {
             return null; // no cae en la rejilla del otro lado
         }
-        int y = Math.round(p.y + Voxels.y(t.pos()) - q.y);
-        int z = Math.round(p.z + Voxels.z(t.pos()) - q.z);
-        return Voxels.inRange(x, y, z) ? new VoxelTarget(qi, Voxels.pack(x, y, z)) : null;
+        int y = Math.round((p.y + Voxels.py(t.pos()) - q.y) * Voxels.UNIT);
+        int z = Math.round((p.z + Voxels.pz(t.pos()) - q.z) * Voxels.UNIT);
+        return Voxels.inRange(x, y, z) ? new VoxelTarget(qi, Voxels.pack(x, y, z), t.size()) : null;
     }
 
     private void voxelAt(double mx, double my, Matrix4f[] mats) {
@@ -1357,7 +1340,7 @@ public class EditorScreen extends Screen {
             if (!exists) {
                 return false;
             }
-            p.voxels = Voxels.with(before, t.pos(), rgb);
+            p.voxels = Voxels.recolor(before, t.pos(), rgb);
             return p.voxels != before;
         }
         strokeVoxels.add(Preview3D.voxelKey(t.part(), t.pos()));
@@ -1368,7 +1351,7 @@ public class EditorScreen extends Screen {
             warn(Ui.tr("voxel.too_many", Voxels.MAX_TOTAL));
             return false;
         }
-        p.voxels = Voxels.with(before, t.pos(), rgb);
+        p.voxels = Voxels.with(before, t.pos(), rgb, t.size());
         return true;
     }
 
@@ -1387,6 +1370,7 @@ public class EditorScreen extends Screen {
             return false;
         }
         brushColor = 0xFF000000 | Voxels.colorAt(p.voxels, i);
+        voxelSize = Voxels.sizeAt(p.voxels, i);
         showNotice(Ui.tr("tool.picked", VehicleJson.hex(brushColor)), true);
         voxelRecolor = false;
         setTool(Tool.BRUSH);
@@ -1406,6 +1390,7 @@ public class EditorScreen extends Screen {
         }
         preview.cursorPart = t.part();
         preview.cursorPos = t.pos();
+        preview.cursorSize = t.size();
         preview.cursorColor = tool == Tool.ERASER ? 0xFFFF5050 : voxelRecolor ? brushColor | 0xFF000000 : 0xFFFFFFFF;
     }
 

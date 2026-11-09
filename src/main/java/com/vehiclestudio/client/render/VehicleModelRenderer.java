@@ -186,38 +186,40 @@ public final class VehicleModelRenderer {
             }
             int pos = v[i * 2];
             int color = multiply(0xFF000000 | (v[i * 2 + 1] & 0xFFFFFF), tint);
-            float x0 = p.x + Voxels.x(pos);
-            float y0 = p.y + Voxels.y(pos);
-            float z0 = p.z + Voxels.z(pos);
-            float x1 = x0 + 1f;
-            float y1 = y0 + 1f;
-            float z1 = z0 + 1f;
+            float k = Voxels.pixels(Voxels.sizeOf(v[i * 2 + 1]));
+            float x0 = p.x + Voxels.px(pos);
+            float y0 = p.y + Voxels.py(pos);
+            float z0 = p.z + Voxels.pz(pos);
+            float x1 = x0 + k;
+            float y1 = y0 + k;
+            float z1 = z0 + k;
             if ((faces & 1) != 0) { // frente (-Z)
-                face(vc, m, nm, x0, y1, z0, 1, 0, 0, 0, -1, 0, 1f, 1f, 0, 0, -1, s, true, color, light, overlay);
+                face(vc, m, nm, x0, y1, z0, 1, 0, 0, 0, -1, 0, k, k, 0, 0, -1, s, true, color, light, overlay);
             }
             if ((faces & 2) != 0) { // atras (+Z)
-                face(vc, m, nm, x1, y1, z1, -1, 0, 0, 0, -1, 0, 1f, 1f, 0, 0, 1, s, true, color, light, overlay);
+                face(vc, m, nm, x1, y1, z1, -1, 0, 0, 0, -1, 0, k, k, 0, 0, 1, s, true, color, light, overlay);
             }
             if ((faces & 4) != 0) { // +X
-                face(vc, m, nm, x1, y1, z0, 0, 0, 1, 0, -1, 0, 1f, 1f, 1, 0, 0, s, true, color, light, overlay);
+                face(vc, m, nm, x1, y1, z0, 0, 0, 1, 0, -1, 0, k, k, 1, 0, 0, s, true, color, light, overlay);
             }
             if ((faces & 8) != 0) { // -X
-                face(vc, m, nm, x0, y1, z1, 0, 0, -1, 0, -1, 0, 1f, 1f, -1, 0, 0, s, true, color, light, overlay);
+                face(vc, m, nm, x0, y1, z1, 0, 0, -1, 0, -1, 0, k, k, -1, 0, 0, s, true, color, light, overlay);
             }
             if ((faces & 16) != 0) { // arriba
-                face(vc, m, nm, x0, y1, z1, 1, 0, 0, 0, 0, -1, 1f, 1f, 0, 1, 0, s, true, color, light, overlay);
+                face(vc, m, nm, x0, y1, z1, 1, 0, 0, 0, 0, -1, k, k, 0, 1, 0, s, true, color, light, overlay);
             }
             if ((faces & 32) != 0) { // abajo
-                face(vc, m, nm, x0, y0, z0, 1, 0, 0, 0, 0, 1, 1f, 1f, 0, -1, 0, s, true, color, light, overlay);
+                face(vc, m, nm, x0, y0, z0, 1, 0, 0, 0, 0, 1, k, k, 0, -1, 0, s, true, color, light, overlay);
             }
         }
     }
 
     /**
-     * Contorno de un hueco de minibloque (para ver donde se pondra o cual se borrara) en el espacio de la pieza.
+     * Contorno de un hueco de minibloque de un tamano (para ver donde se pondra o cual se borrara) en el espacio de
+     * la pieza.
      */
     public static void renderVoxelCursor(Matrix4f partMat, PoseStack.Pose root, VertexConsumer vc, VehiclePart p,
-                                         int pos, int color, float thickness) {
+                                         int pos, int size, int color, float thickness) {
         Matrix4f m = new Matrix4f();
         root.pose().mul(partMat, m);
         Matrix3f rotation = new Matrix3f();
@@ -226,12 +228,13 @@ public final class VehicleModelRenderer {
         root.normal().mul(rotation, normal);
         TextureAtlasSprite solid = Materials.sprite(MaterialIds.SOLID);
         float h = thickness / 2f;
-        float x0 = p.x + Voxels.x(pos);
-        float y0 = p.y + Voxels.y(pos);
-        float z0 = p.z + Voxels.z(pos);
-        float[] xs = {x0, x0 + 1f};
-        float[] ys = {y0, y0 + 1f};
-        float[] zs = {z0, z0 + 1f};
+        float k = Voxels.pixels(size);
+        float x0 = p.x + Voxels.px(pos);
+        float y0 = p.y + Voxels.py(pos);
+        float z0 = p.z + Voxels.pz(pos);
+        float[] xs = {x0, x0 + k};
+        float[] ys = {y0, y0 + k};
+        float[] zs = {z0, z0 + k};
         for (float y : ys) {
             for (float z : zs) {
                 bar(vc, m, normal, solid, xs[0] - h, y - h, z - h, xs[1] + h, y + h, z + h, color);
