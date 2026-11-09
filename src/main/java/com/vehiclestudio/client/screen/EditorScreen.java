@@ -648,6 +648,7 @@ public class EditorScreen extends Screen {
                 y = chips(y, SteeringStyle.values(), 2, () -> p.steeringStyle, v -> p.steeringStyle = v,
                         v -> Ui.tr("steering." + v.key()), v -> Ui.tr("steering." + v.key() + ".tip")) + 4;
             }
+            y = toggleRow(y, "parts.solid", () -> p.solid, v -> p.solid = v, "parts.solid_tip") + 4;
         }
         y = section(y, Ui.tr("parts.list", def.parts.size(), VehicleDefinition.MAX_PARTS));
         int listH = Math.max(LIST_ROW * 5 + 4, viewBottom - viewTop - y - PAD);

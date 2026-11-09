@@ -31,6 +31,8 @@ public class VehiclePart {
     public boolean stretch;
     /** true = se dibuja con brillo maximo (ojos que brillan en la oscuridad). */
     public boolean glow;
+    /** true = se choca con ella (jugadores, mobs, bloques); false = adorno que se puede atravesar. */
+    public boolean solid = true;
 
     // --- Rueda (el color de la pieza es el de la goma) ---
     public int rimColor = 0xC8C8CC;
@@ -133,6 +135,7 @@ public class VehiclePart {
         c.material = material;
         c.stretch = stretch;
         c.glow = glow;
+        c.solid = solid;
         c.kind = kind;
         c.rimColor = rimColor;
         c.rimStyle = rimStyle;
@@ -475,6 +478,12 @@ public class VehiclePart {
 
     public VehiclePart glowing() {
         this.glow = true;
+        return this;
+    }
+
+    /** Adorno que se puede atravesar. */
+    public VehiclePart ghost() {
+        this.solid = false;
         return this;
     }
 }

@@ -8,6 +8,8 @@ import com.vehiclestudio.data.VehicleStore;
 import com.vehiclestudio.data.DefCodec;
 import com.vehiclestudio.server.VehicleService;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -56,6 +58,7 @@ public final class ModNetwork {
         registrar.playToServer(Payloads.Summon.TYPE, Payloads.Summon.STREAM_CODEC, ModNetwork::onSummon);
         registrar.playToServer(Payloads.DriveInput.TYPE, Payloads.DriveInput.STREAM_CODEC, ModNetwork::onDriveInput);
         registrar.playToServer(Payloads.VehicleAction.TYPE, Payloads.VehicleAction.STREAM_CODEC, ModNetwork::onVehicleAction);
+        registrar.playToServer(Payloads.VehicleHit.TYPE, Payloads.VehicleHit.STREAM_CODEC, ModNetwork::onVehicleHit);
 
         registrar.playToClient(Payloads.SyncVehicle.TYPE, Payloads.SyncVehicle.STREAM_CODEC, ModNetwork::onSync);
         registrar.playToClient(Payloads.RemoveVehicle.TYPE, Payloads.RemoveVehicle.STREAM_CODEC, ModNetwork::onRemove);
@@ -142,6 +145,35 @@ public final class ModNetwork {
                 }
                 default -> {
                 }
+            }
+        }
+    }
+
+    /**
+     * Golpe o clic derecho en un vehiculo. El cliente lo elige con un rayo contra sus piezas; aqui se comprueba con las
+     * mismas piezas que el jugador llega (su alcance mas un poco, como el juego con cualquier entidad).
+     */
+    private static void onVehicleHit(Payloads.VehicleHit payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player) || player.isSpectator()) {
+            return;
+        }
+        if (!(player.level().getEntity(payload.entityId()) instanceof CustomVehicle v) || v.isRemoved()) {
+            return;
+        }
+        if (v.reach(player.getEyePosition()) > player.entityInteractionRange() + 1.0) {
+            return;
+        }
+        player.resetLastActionTime();
+        switch (payload.action()) {
+            case 0 -> player.attack(v);
+            case 1, 2 -> {
+                InteractionHand hand = payload.action() == 2 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+                InteractionResult result = player.interactOn(v, hand);
+                if (result.consumesAction() && result.shouldSwing()) {
+                    player.swing(hand, true);
+                }
+            }
+            default -> {
             }
         }
     }

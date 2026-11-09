@@ -85,6 +85,7 @@ public final class VehicleJson {
             j.addProperty("material", p.material);
             j.addProperty("stretch", p.stretch);
             j.addProperty("glow", p.glow);
+            j.addProperty("solid", p.solid);
             switch (p.kind) {
                 case WHEEL -> {
                     JsonObject w = new JsonObject();
@@ -233,6 +234,7 @@ public final class VehicleJson {
                 p.material = str(j, "material", p.material);
                 p.stretch = bool(j, "stretch", false);
                 p.glow = bool(j, "glow", false);
+                p.solid = bool(j, "solid", true);
                 JsonObject wheel = obj(j, "wheel");
                 if (wheel != null) {
                     p.rimColor = wheel.has("rimColor") ? parseColor(wheel.get("rimColor"), p.rimColor) : p.rimColor;

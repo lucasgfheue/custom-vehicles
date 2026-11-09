@@ -253,6 +253,8 @@
   "gui.vehiclestudio.parts.kind": "Tipo de pieza",
   "gui.vehiclestudio.parts.light_mode": "Cuándo se enciende",
   "gui.vehiclestudio.parts.list": "Piezas del modelo (%s/%s)",
+  "gui.vehiclestudio.parts.solid": "Sólida (nadie la atraviesa)",
+  "gui.vehiclestudio.parts.solid_tip": "Los jugadores, los mobs y el suelo chocan con esta pieza. Quítalo en las piezas que se puedan atravesar, como una cortina o el hueco de una puerta.",
   "gui.vehiclestudio.parts.steering_style": "Forma",
   "gui.vehiclestudio.prop_axis.front": "Delante",
   "gui.vehiclestudio.prop_axis.front.tip": "Gira de frente, como la hélice de una avioneta (gírala 90° para un rotor de cola).",

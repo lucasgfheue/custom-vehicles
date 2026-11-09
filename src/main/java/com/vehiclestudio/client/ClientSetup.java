@@ -51,7 +51,10 @@ public final class ClientSetup {
         NeoForge.EVENT_BUS.addListener(ClientSetup::onClientTick);
         NeoForge.EVENT_BUS.addListener(ClientSetup::onLoggingOut);
         NeoForge.EVENT_BUS.addListener(ClientSetup::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(VehiclePick::onClick);
+        NeoForge.EVENT_BUS.addListener(VehiclePick::onHighlight);
         CustomVehicle.localControls = ClientSetup::controls;
+        CustomVehicle.localPlayer = () -> Minecraft.getInstance().player;
         CustomVehicle.clientEffects = VehicleEngineSound::ensure;
     }
 
@@ -94,6 +97,7 @@ public final class ClientSetup {
 
     private static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+        VehiclePick.tick(mc);
         if (openStudio != null) {
             while (openStudio.consumeClick()) {
                 if (mc.player != null && mc.screen == null) {

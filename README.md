@@ -14,7 +14,7 @@ ratón acerca hacia donde está el cursor.
 | Pestaña | Qué hay dentro |
 |---|---|
 | **Plantilla** | 14 vehículos para empezar: coche, deportivo, camioneta, autobús, moto, kart, tractor, buggy, carreta, **helicóptero**, **avioneta**, **dron**, **coche cohete** y uno vacío (chasis, 4 ruedas y un asiento). Pasa el ratón para verlos en 3D y haz clic para usarlos. |
-| **Piezas** | Añadir piezas de cada tipo: **carrocería** (cubos), **rueda**, **asiento**, **volante/manillar**, **luz**, **escape**, **hélice** y **propulsor**. Duplicar, espejar (crea la pieza del otro lado), borrar, centrar, nombre y «unida a». Para las luces eliges cuándo se encienden (faro, trasera o siempre) y para el volante su forma (volante o manillar de moto). |
+| **Piezas** | Añadir piezas de cada tipo: **carrocería** (cubos), **rueda**, **asiento**, **volante/manillar**, **luz**, **escape**, **hélice** y **propulsor**. Duplicar, espejar (crea la pieza del otro lado), borrar, centrar, nombre y «unida a». Para las luces eliges cuándo se encienden (faro, trasera o siempre) y para el volante su forma (volante o manillar de moto). **Sólida**: si los jugadores, los mobs y el suelo chocan con la pieza (quítalo en las que se puedan atravesar, como una cortina). |
 | **Forma** | Posición, tamaño, pivote y giro en X/Y/Z (16 píxeles = 1 bloque), también con el ratón. |
 | **Ruedas** | **10 ruedas de referencia** (coche, deportiva, camión, todoterreno, moto, bicicleta, tractor, carreta, kart y monster truck) que se ponen con un clic sin mover la rueda de sitio. Después se edita todo: diámetro, ancho, si **gira al doblar**, color y dibujo de la goma (lisa, bloques, tacos, tractor), color, forma (disco, tapacubos, 5 radios, estrella, bicicleta, madera) y tamaño de la llanta. Botones **Igual en todas las ruedas** y **Poner 4 ruedas**. |
 | **Asientos** | Hasta 12 asientos con 6 estilos (de coche, banco, sillín, de carreras, silla e invisible) y cuál es el del **conductor**. |
@@ -35,6 +35,15 @@ goma (E) y gotero (I). Deshacer/rehacer (Ctrl+Z / Ctrl+Y), guardar (Ctrl+S), dup
 - Los que vuelan no se caen a plomo: sin conductor, un helicóptero baja despacio hasta el suelo y un avión planea.
 - Se conduce como en un juego de coches: las curvas dependen de la distancia entre ejes y, a mucha velocidad, se
   abren (frena o usa el freno de mano para girar cerrado). Velocímetro en pantalla mientras conduces.
+- Los vehículos son **sólidos**, pieza por pieza y aunque estén girados en diagonal:
+  - Nadie los atraviesa: los jugadores y los mobs chocan con sus paredes, se pueden subir encima y andar por su
+    suelo, y entrar en uno hueco (la caja de una camioneta, un remolque) por donde está abierto.
+  - El vehículo choca con el terreno con todas sus piezas: no se mete en las paredes ni en el suelo, apoya en lo que
+    toque (un vehículo largo no se hunde en un agujero bajo el centro), sube escalones y no gira si al girar metería
+    el morro o la cola en una pared. También choca con otros vehículos.
+  - Las flechas y los objetos que caen chocan con él, y lo que se queda dentro cuando el vehículo se le echa encima
+    sale empujado hacia fuera.
+  - Se puede hacer clic en cualquier parte del vehículo, y una pieza tapa lo que tiene detrás.
 - Los vehículos **andan siempre** (no gastan combustible).
 - Funciona en un jugador y en servidores (el mod debe estar en el servidor y en los clientes).
 
@@ -43,7 +52,7 @@ goma (E) y gotero (I). Deshacer/rehacer (Ctrl+Z / Ctrl+Y), guardar (Ctrl+S), dup
 | Tecla | Qué hace |
 |---|---|
 | **V** | Abrir el taller de vehículos |
-| **Clic derecho** en un vehículo | Subirse (el primero que sube conduce) |
+| **Clic derecho** en cualquier parte de un vehículo | Subirse (el primero que sube conduce) |
 | **W / S** | Acelerar · frenar y marcha atrás |
 | **A / D** | Girar |
 | **Espacio** | Freno de mano (derrapa en las curvas). En los que vuelan: **subir** (y despegar) |
@@ -70,7 +79,7 @@ Todas las teclas se cambian en **Opciones → Controles** (apartado *Vehicle Stu
 4. Ve a la pestaña **Actions**. La compilación empieza sola (o pulsa **Run workflow**). Tarda unos 5–10 minutos
    la primera vez porque descarga y prepara Minecraft.
 5. Cuando aparezca el círculo verde ✔, entra en la ejecución y descarga el artefacto
-   **VehicleStudio-NeoForge-1.21.1**. Dentro está el archivo `vehiclestudio-neoforge-1.21.1-1.1.0.jar`.
+   **VehicleStudio-NeoForge-1.21.1**. Dentro está el archivo `vehiclestudio-neoforge-1.21.1-1.2.0.jar`.
 
 Para compilar en tu PC: instala Java 21 y ejecuta `gradlew build` (Windows) o `./gradlew build` (Linux/Mac).
 El `.jar` queda en `build/libs/`.
@@ -149,8 +158,12 @@ src/main/resources/        Texturas, modelos, idiomas (es/en), receta y botín
   suelta **R** para que se recargue.
 - **La llama apunta hacia otro lado**: sale por la cara de atrás (+Z) del propulsor; gíralo en **Forma** (por
   ejemplo 90° en X para que apunte hacia abajo).
-- **El morro de un vehículo largo se mete en las paredes**: la caja de choque de las entidades de Minecraft es
-  cuadrada (del ancho del vehículo); en vehículos muy largos el frente y la cola pueden atravesar un poco los bloques.
+- **Estoy de pie encima de un vehículo y se va sin mí**: Minecraft no lleva a las entidades que están encima de
+  otra que se mueve (tampoco con las barcas); el vehículo te empuja. Para viajar, siéntate en un asiento.
+- **Me paro un poco antes de una pared que va en diagonal**: Minecraft solo tiene cajas de choque rectas; cuando una
+  pieza está girada, se cubre con cajas pequeñas que sobresalen un poquito (unos píxeles) de la pieza.
+- **Atravieso una pieza**: mira en **Piezas** que tenga marcado **Sólida**. Los **minibloques** son decoración y no
+  chocan.
 - **Los faros no iluminan el suelo**: brillan (se ven aunque sea de noche), pero Minecraft no tiene luces que se
   muevan sin otros mods.
 - **En supervivencia no me da el vehículo**: necesitas en el inventario los lingotes de hierro que indica la

@@ -1,5 +1,7 @@
 package com.vehiclestudio.entity;
 
+import com.vehiclestudio.data.Colliders;
+import com.vehiclestudio.data.RigidSweep;
 import com.vehiclestudio.data.DrivePhysics;
 import com.vehiclestudio.data.FlightMode;
 import com.vehiclestudio.data.HornSound;
@@ -50,15 +52,19 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.neoforged.neoforge.entity.PartEntity;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Un vehiculo en el mundo. Como las barcas: lo mueve el cliente del conductor (y el servidor cuando no hay
@@ -96,6 +102,8 @@ public class CustomVehicle extends Entity {
 
     /** Lo pone el cliente: los controles si el conductor es el jugador local (null si no). */
     public static Function<CustomVehicle, DrivePhysics.Input> localControls = v -> null;
+    /** Lo pone el cliente: el jugador local (las cajas solidas del cliente solo hacen falta a su alrededor). */
+    public static Supplier<Entity> localPlayer = () -> null;
     /** Lo pone el cliente: sonido del motor y demas efectos. */
     public static Consumer<CustomVehicle> clientEffects = v -> {
     };
@@ -107,6 +115,12 @@ public class CustomVehicle extends Entity {
      */
     private static final double THIGH = 0.03;
     private static final int MAX_STORAGE = 54;
+    /** Como mucho, entidades a las que el servidor pone cajas alrededor (las mas cercanas). */
+    private static final int MAX_ZONES = 24;
+    /** Cajas con las que se mira si un jugador se ha quedado dentro de las piezas (para empujarle fuera). */
+    private static final int PLAYER_PUSH_BOXES = 24;
+    /** Lo lejos que puede quedar el centro de otro vehiculo de lo que toca este (vehiculos muy largos). */
+    private static final double OTHER_REACH = 16.0;
 
     // Fisica (en el lado que controla el vehiculo)
     private final DrivePhysics.State physics = new DrivePhysics.State();
@@ -158,6 +172,29 @@ public class CustomVehicle extends Entity {
     private float[][] exhausts;
     @Nullable
     private float[] layout;
+    /** Cajas solidas para jugadores y mobs (siempre las mismas entidades: el juego las registra al aparecer). */
+    private final VehicleCollider[] colliders = new VehicleCollider[Colliders.ENTITY_BOXES];
+    /** Trozos del modelo para chocar con los bloques (cambian con la definicion). */
+    @Nullable
+    private List<float[]> terrainModel;
+    /** Las piezas solidas (para las cajas) y todas (para hacer clic), y donde quedan con el giro de ahora. */
+    @Nullable
+    private Colliders.Body solidBody;
+    @Nullable
+    private Colliders.Body pickBody;
+    @Nullable
+    private Colliders.Frame solidFrame;
+    @Nullable
+    private Colliders.Frame pickFrame;
+    private float frameYaw = Float.NaN;
+    private float framePitch;
+    private float frameRoll;
+    /** Para no recibir varias veces el mismo golpe (una explosion toca todas las cajas a la vez). */
+    private int lastHurtTick = Integer.MIN_VALUE;
+    @Nullable
+    private Object lastHurtType;
+    @Nullable
+    private Entity lastHurtBy;
     /** Donde estaba en el tick anterior (servidor), para saber cuanto avanzo al atropellar. */
     private double pushX = Double.NaN;
     private double pushZ = Double.NaN;
@@ -170,6 +207,326 @@ public class CustomVehicle extends Entity {
         this.blocksBuilding = true;
         // La gravedad la pone drive(); asi el servidor no echa al conductor por "volar" con el vehiculo
         this.setNoGravity(true);
+        for (int i = 0; i < this.colliders.length; i++) {
+            this.colliders[i] = new VehicleCollider(this);
+        }
+        assignColliderIds(this.getId());
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Cajas solidas (como las partes del dragon del End)
+    // ---------------------------------------------------------------------------------------
+
+    /** Las cajas usan los ids siguientes al del vehiculo, igual en el servidor y en los clientes. */
+    private void assignColliderIds(int id) {
+        for (int i = 0; i < this.colliders.length; i++) {
+            if (this.colliders[i] != null) {
+                this.colliders[i].setId(id + i + 1);
+            }
+        }
+    }
+
+    @Override
+    public void setId(int id) {
+        super.setId(id);
+        if (this.colliders != null) {
+            assignColliderIds(id);
+        }
+    }
+
+    @Override
+    public boolean isMultipartEntity() {
+        return true;
+    }
+
+    @Override
+    public PartEntity<?>[] getParts() {
+        return this.colliders;
+    }
+
+    /** Las cajas de los vehiculos no le frenan: contra otro vehiculo choca con sus piezas (ver obstacles). */
+    @Override
+    public boolean canCollideWith(Entity other) {
+        if (other instanceof VehicleCollider) {
+            return false;
+        }
+        return super.canCollideWith(other);
+    }
+
+    private boolean anyColliderActive() {
+        for (VehicleCollider c : this.colliders) {
+            if (c.isActive()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** true en el cliente si el jugador local va sentado en este vehiculo. */
+    public boolean hasLocalPassenger() {
+        if (!this.level().isClientSide()) {
+            return false;
+        }
+        for (Entity e : getPassengers()) {
+            if (e instanceof Player p && p.isLocalPlayer()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<float[]> terrainModel(VehicleDefinition d) {
+        if (this.terrainModel == null) {
+            this.terrainModel = Colliders.terrainBoxes(d);
+        }
+        return this.terrainModel;
+    }
+
+    /** Las piezas solidas colocadas con el giro de ahora (en el mundo, relativas al vehiculo). */
+    private Colliders.Frame solidFrame(VehicleDefinition d) {
+        checkFrames();
+        if (this.solidFrame == null) {
+            if (this.solidBody == null) {
+                this.solidBody = Colliders.body(d, true);
+            }
+            this.solidFrame = Colliders.frame(this.solidBody,
+                    VehicleGeometry.modelToWorld(layout(d), this.frameYaw, this.framePitch, this.frameRoll));
+        }
+        return this.solidFrame;
+    }
+
+    /** Todas las piezas (solidas o no) colocadas con el giro de ahora: lo que se puede elegir con el raton. */
+    private Colliders.Frame pickFrame(VehicleDefinition d) {
+        checkFrames();
+        if (this.pickFrame == null) {
+            if (this.pickBody == null) {
+                this.pickBody = Colliders.body(d, false);
+            }
+            this.pickFrame = Colliders.frame(this.pickBody,
+                    VehicleGeometry.modelToWorld(layout(d), this.frameYaw, this.framePitch, this.frameRoll));
+        }
+        return this.pickFrame;
+    }
+
+    private void checkFrames() {
+        float yaw = this.getYRot();
+        float pitch = this.getXRot();
+        if (yaw != this.frameYaw || pitch != this.framePitch || this.roll != this.frameRoll) {
+            this.frameYaw = yaw;
+            this.framePitch = pitch;
+            this.frameRoll = this.roll;
+            this.solidFrame = null;
+            this.pickFrame = null;
+        }
+    }
+
+    /** Coordenadas relativas al vehiculo de una caja del mundo. */
+    private double[] relative(AABB b) {
+        return new double[]{b.minX - getX(), b.minY - getY(), b.minZ - getZ(), b.maxX - getX(), b.maxY - getY(),
+                b.maxZ - getZ()};
+    }
+
+    /**
+     * Donde puede estar alguien en el proximo tick: su caja, mas side a los lados, down por debajo y up por encima, y
+     * mas lo que se mueve por tick (hasta 4 bloques).
+     */
+    private Colliders.Zone zoneOf(Entity e, double side, double down, double up, int rank) {
+        double[] core = relative(e.getBoundingBox());
+        Vec3 v = e.getDeltaMovement();
+        double h = side + Math.min(4.0, Math.sqrt(v.x * v.x + v.z * v.z));
+        double lo = down + Math.min(4.0, Math.max(0.0, -v.y));
+        double hi = up + Math.min(4.0, Math.max(0.0, v.y));
+        return new Colliders.Zone(new double[]{core[0] - h, core[1] - lo, core[2] - h, core[3] + h, core[4] + hi,
+                core[5] + h}, core, rank);
+    }
+
+    /** Servidor: quien necesita cajas solidas (los jugadores no: su movimiento lo lleva su cliente). */
+    private static boolean needsBoxes(Entity e) {
+        return !(e instanceof VehicleCollider) && !(e instanceof CustomVehicle) && !(e instanceof Player)
+                && !e.isPassenger() && !e.isSpectator() && !e.noPhysics && e.isAlive();
+    }
+
+    /** Las zonas en las que hacen falta cajas solidas en este lado. */
+    private List<Colliders.Zone> zones(Colliders.Frame f) {
+        List<Colliders.Zone> out = new ArrayList<>();
+        double[] b = f.bounds();
+        if (b == null) {
+            return out;
+        }
+        if (this.level().isClientSide()) {
+            // el cliente solo mueve a su jugador (o lo que este montando, como un caballo o una barca): las cajas, a
+            // su alrededor
+            Entity me = localPlayer.get();
+            if (me != null && me.isPassenger()) {
+                Entity root = me.getRootVehicle();
+                me = root instanceof CustomVehicle ? null : root;
+            }
+            if (me != null && !me.isSpectator() && !me.noPhysics) {
+                out.add(zoneOf(me, 0.35, 0.35, 0.65, 0));
+            }
+            return out;
+        }
+        AABB area = new AABB(getX() + b[0], getY() + b[1], getZ() + b[2], getX() + b[3], getY() + b[4], getZ() + b[5])
+                .inflate(3.0);
+        List<Entity> found = this.level().getEntities(this, area, CustomVehicle::needsBoxes);
+        if (found.size() > MAX_ZONES) {
+            // con muchos alrededor, los mas cercanos
+            double cx = getX() + (b[0] + b[3]) / 2;
+            double cy = getY() + (b[1] + b[4]) / 2;
+            double cz = getZ() + (b[2] + b[5]) / 2;
+            found = new ArrayList<>(found);
+            found.sort((p, q) -> Double.compare(p.distanceToSqr(cx, cy, cz), q.distanceToSqr(cx, cy, cz)));
+            found = found.subList(0, MAX_ZONES);
+        }
+        for (Entity e : found) {
+            out.add(zoneOf(e, 0.35, 0.35, 0.65, e instanceof LivingEntity ? 0 : 1));
+        }
+        return out;
+    }
+
+    /** Trozos para chocar con los bloques, en el mundo relativo al vehiculo, con un giro dado (y la caja propia). */
+    private double[][] terrainBoxes(VehicleDefinition d, float yaw, float pitch, float roll) {
+        Matrix4f m = VehicleGeometry.modelToWorld(layout(d), yaw, pitch, roll);
+        double[][] parts = Colliders.toWorld(terrainModel(d), m);
+        // la caja de la entidad tambien: el servidor comprueba con ella que el vehiculo no se meta en los bloques
+        AABB own = this.getBoundingBox().move(-this.getX(), -this.getY(), -this.getZ());
+        double[][] out = Arrays.copyOf(parts, parts.length + 1);
+        out[parts.length] = new double[]{own.minX, own.minY, own.minZ, own.maxX, own.maxY, own.maxZ};
+        return out;
+    }
+
+    @Override
+    public void remove(RemovalReason reason) {
+        super.remove(reason);
+        for (VehicleCollider c : this.colliders) {
+            c.deactivate();
+        }
+    }
+
+    /**
+     * Coloca las cajas solidas alrededor de quien las puede tocar: en el cliente, cajas que encierran las piezas para
+     * su jugador; en el servidor, cajas que caben dentro de las piezas para los mobs, objetos y flechas (asi nunca frena
+     * a un jugador en un sitio en el que su cliente le deja estar).
+     */
+    private void updateColliders(@Nullable VehicleDefinition d) {
+        List<double[]> boxes = List.of();
+        if (d != null && !this.isRemoved()) {
+            Colliders.Frame f = solidFrame(d);
+            if (f.size() > 0) {
+                List<Colliders.Zone> zones = zones(f);
+                if (!zones.isEmpty()) {
+                    boxes = this.level().isClientSide()
+                            ? Colliders.near(f, zones, this.colliders.length, Colliders.TOLERANCE)
+                            : Colliders.inner(f, zones, this.colliders.length, Colliders.INNER_TOLERANCE);
+                }
+            }
+        }
+        double x = this.getX();
+        double y = this.getY();
+        double z = this.getZ();
+        for (int i = 0; i < this.colliders.length; i++) {
+            if (i < boxes.size()) {
+                double[] b = boxes.get(i);
+                this.colliders[i].place(x + b[0], y + b[1], z + b[2], x + b[3], y + b[4], z + b[5]);
+            } else {
+                this.colliders[i].deactivate();
+            }
+        }
+    }
+
+    /** Bloques y entidades solidas de una zona, como cajas relativas al vehiculo. */
+    private List<double[]> obstacles(double[] area) {
+        AABB zone = new AABB(this.getX() + area[0], this.getY() + area[1], this.getZ() + area[2],
+                this.getX() + area[3], this.getY() + area[4], this.getZ() + area[5]);
+        List<double[]> out = new ArrayList<>();
+        for (VoxelShape shape : this.level().getBlockCollisions(this, zone)) {
+            addShape(out, shape);
+        }
+        for (VoxelShape shape : this.level().getEntityCollisions(this, zone)) {
+            addShape(out, shape);
+        }
+        // otros vehiculos: con todas sus piezas
+        for (CustomVehicle o : this.level().getEntitiesOfClass(CustomVehicle.class, zone.inflate(OTHER_REACH),
+                o -> o != this && !o.isRemoved())) {
+            VehicleDefinition od = o.def();
+            if (od == null) {
+                continue;
+            }
+            double ox = o.getX() - this.getX();
+            double oy = o.getY() - this.getY();
+            double oz = o.getZ() - this.getZ();
+            for (double[] b : o.terrainBoxes(od, o.getYRot(), o.getXRot(), o.roll)) {
+                double[] r = {b[0] + ox, b[1] + oy, b[2] + oz, b[3] + ox, b[4] + oy, b[5] + oz};
+                if (r[0] < area[3] && r[3] > area[0] && r[1] < area[4] && r[4] > area[1] && r[2] < area[5]
+                        && r[5] > area[2]) {
+                    out.add(r);
+                }
+            }
+        }
+        return out;
+    }
+
+    private void addShape(List<double[]> out, VoxelShape shape) {
+        for (AABB a : shape.toAabbs()) {
+            out.add(new double[]{a.minX - this.getX(), a.minY - this.getY(), a.minZ - this.getZ(),
+                    a.maxX - this.getX(), a.maxY - this.getY(), a.maxZ - this.getZ()});
+        }
+    }
+
+    private static double[] grow(double[] u, double dx, double dy, double dz, double extra) {
+        return new double[]{u[0] + Math.min(0, dx) - extra, u[1] + Math.min(0, dy) - extra, u[2] + Math.min(0, dz) - extra,
+                u[3] + Math.max(0, dx) + extra, u[4] + Math.max(0, dy) + extra, u[5] + Math.max(0, dz) + extra};
+    }
+
+    /**
+     * Se mueve con todas sus piezas: ninguna se mete en los bloques ni en otras entidades solidas, sube escalones y
+     * se apoya en el suelo con la pieza que lo toque. Devuelve el movimiento hecho.
+     */
+    private Vec3 moveSolid(VehicleDefinition d, Vec3 wanted) {
+        double[][] boxes = terrainBoxes(d, this.getYRot(), this.getXRot(), this.roll);
+        double step = this.onGround() ? Math.max(0f, d.stepHeight) : 0.0;
+        double[] u = RigidSweep.union(boxes);
+        double[] area = grow(u, wanted.x, wanted.y, wanted.z, 0.01);
+        area[4] += step;
+        List<double[]> obstacles = obstacles(area);
+        RigidSweep.Result r = RigidSweep.move(boxes, obstacles, wanted.x, wanted.y, wanted.z, step, this.onGround());
+        boolean wasOnGround = this.onGround();
+        this.setPos(this.getX() + r.dx(), this.getY() + r.dy(), this.getZ() + r.dz());
+        this.horizontalCollision = r.horizontal();
+        this.verticalCollision = r.vertical();
+        this.verticalCollisionBelow = r.onGround();
+        this.setOnGround(r.onGround());
+        Vec3 v = this.getDeltaMovement();
+        this.setDeltaMovement(Math.abs(r.dx() - wanted.x) > 1.0e-6 ? 0 : v.x,
+                r.vertical() ? 0 : v.y, Math.abs(r.dz() - wanted.z) > 1.0e-6 ? 0 : v.z);
+        if (r.onGround() && !wasOnGround && wanted.y < 0 && !this.level().isClientSide()) {
+            landed(-wanted.y);
+        }
+        return new Vec3(r.dx(), r.dy(), r.dz());
+    }
+
+    /** Al tocar el suelo (lo mueve el servidor): dano de caida segun lo rapido que bajaba. */
+    private void landed(double speed) {
+        if (speed > 0.5) {
+            float equivalent = (float) (speed * speed / 0.16);
+            this.causeFallDamage(equivalent, 1.0f, this.damageSources().fall());
+            if (equivalent > 3f) {
+                this.hurt(this.damageSources().fall(), (equivalent - 3f) * 0.5f);
+            }
+        }
+        this.resetFallDistance();
+    }
+
+    /** true si girar (o inclinarse) a esa posicion metiera alguna pieza en un bloque en el que no estaba. */
+    private boolean rotationBlocked(VehicleDefinition d, float yaw, float pitch, float roll) {
+        double[][] now = terrainBoxes(d, this.getYRot(), this.getXRot(), this.roll);
+        double[][] next = terrainBoxes(d, yaw, pitch, roll);
+        double[] u = RigidSweep.union(now);
+        double[] v = RigidSweep.union(next);
+        double[] area = {Math.min(u[0], v[0]) - 0.01, Math.min(u[1], v[1]) - 0.01, Math.min(u[2], v[2]) - 0.01,
+                Math.max(u[3], v[3]) + 0.01, Math.max(u[4], v[4]) + 0.01, Math.max(u[5], v[5]) + 0.01};
+        List<double[]> obstacles = obstacles(area);
+        return RigidSweep.overlaps(next, obstacles, 1.0e-4) && !RigidSweep.overlaps(now, obstacles, 1.0e-4);
     }
 
     /** Coloca un vehiculo en el mundo mirando hacia yaw. */
@@ -180,9 +537,22 @@ public class CustomVehicle extends Entity {
         v.setDefinitionId(def.id);
         v.moveTo(x, y, z, yaw, 0f);
         v.refreshDimensions();
-        if (checkSpace && !level.noCollision(v, v.getBoundingBox().deflate(0.05))) {
-            v.setPos(x, y + 1.0, z);
+        if (checkSpace) {
+            // que ninguna pieza quede metida en un bloque: si no cabe, un poco mas arriba
+            VehicleDefinition d = v.def();
+            for (int up = 0; up <= 3 && d != null; up++) {
+                v.setPos(x, y + up, z);
+                double[][] boxes = v.terrainBoxes(d, yaw, 0f, 0f);
+                double[] area = RigidSweep.union(boxes);
+                if (area == null || !RigidSweep.overlaps(boxes, v.obstacles(area), 1.0e-4)) {
+                    break;
+                }
+                if (up == 3) {
+                    v.setPos(x, y, z);
+                }
+            }
         }
+        v.updateColliders(v.def());
         level.addFreshEntity(v);
         return v;
     }
@@ -221,6 +591,11 @@ public class CustomVehicle extends Entity {
             this.exhausts = null;
             this.layout = null;
             this.sizeCache = null;
+            this.terrainModel = null;
+            this.solidBody = null;
+            this.pickBody = null;
+            this.solidFrame = null;
+            this.pickFrame = null;
             this.refreshDimensions();
         }
         return d;
@@ -586,7 +961,9 @@ public class CustomVehicle extends Entity {
                 }
                 Vec3 spot = new Vec3(x, pos.getY() + floor, z);
                 for (Pose pose : passenger.getDismountPoses()) {
-                    if (DismountHelper.canDismountTo(this.level(), spot, passenger, pose)) {
+                    // ni dentro de un bloque ni dentro de las piezas del propio vehiculo
+                    if (DismountHelper.canDismountTo(this.level(), spot, passenger, pose)
+                            && !touchesSolid(d, passenger.getDimensions(pose).makeBoundingBox(spot))) {
                         passenger.setPose(pose);
                         return spot;
                     }
@@ -746,6 +1123,14 @@ public class CustomVehicle extends Entity {
             // los que van dentro no rompen su propio vehiculo
             return false;
         }
+        // el mismo golpe en el mismo tick (una explosion o un rayo tocan todas sus cajas a la vez) cuenta una vez
+        if (this.tickCount == this.lastHurtTick && source.type() == this.lastHurtType
+                && source.getDirectEntity() == this.lastHurtBy) {
+            return false;
+        }
+        this.lastHurtTick = this.tickCount;
+        this.lastHurtType = source.type();
+        this.lastHurtBy = source.getDirectEntity();
         VehicleDefinition d = def();
         this.entityData.set(DATA_HURT_DIR, -getHurtDir());
         this.entityData.set(DATA_HURT_TIME, 10);
@@ -787,22 +1172,49 @@ public class CustomVehicle extends Entity {
         if (this.isRemoved()) {
             return false;
         }
-        // Quien va dentro tiene los ojos dentro de la caja del vehiculo: el rayo del cursor lo elegiria siempre a el
-        // (y un clic lo romperia). Asi apunta a traves, como desde una barca.
         if (this.level().isClientSide()) {
-            for (Entity e : getPassengers()) {
-                if (e instanceof Player p && p.isLocalPlayer()) {
-                    return false;
-                }
-            }
+            // En el cliente se elige con un rayo contra las piezas tal cual (VehiclePick); la caja de la entidad solo
+            // si no hay piezas (sin definicion). Quien va dentro apunta a traves, como desde una barca.
+            VehicleDefinition d = def();
+            return (d == null || pickFrame(d).size() == 0) && !hasLocalPassenger();
         }
-        return true;
+        // en el servidor (flechas y demas), sus cajas si las tiene puestas; si no, la de la entidad
+        return !anyColliderActive();
+    }
+
+    /** Cliente: donde (de 0 a 1) entra el segmento de from a to en alguna pieza del vehiculo, o -1 si no toca ninguna. */
+    public double rayHit(Vec3 from, Vec3 to) {
+        VehicleDefinition d = def();
+        if (d == null || this.isRemoved()) {
+            return -1;
+        }
+        double x = getX();
+        double y = getY();
+        double z = getZ();
+        return Colliders.raycast(pickFrame(d), new double[]{from.x - x, from.y - y, from.z - z},
+                new double[]{to.x - x, to.y - y, to.z - z});
+    }
+
+    /** Lo lejos que queda un punto de la pieza mas cercana (para ver si un jugador llega a tocar el vehiculo). */
+    public double reach(Vec3 p) {
+        VehicleDefinition d = def();
+        Colliders.Frame f = d == null ? null : pickFrame(d);
+        if (f == null || f.size() == 0) {
+            return Math.sqrt(this.getBoundingBox().distanceToSqr(p));
+        }
+        return Colliders.distance(f, new double[]{p.x - getX(), p.y - getY(), p.z - getZ()});
+    }
+
+    /** true si esa caja (del mundo) se mete en alguna pieza solida del vehiculo. */
+    private boolean touchesSolid(VehicleDefinition d, AABB box) {
+        Colliders.Frame f = solidFrame(d);
+        return f.size() > 0 && Colliders.touches(f, relative(box), Colliders.TOLERANCE);
     }
 
     @Override
     public boolean canBeCollidedWith() {
-        // sin definicion (aun no llego al cliente) no hay nada que ver: que no sea un obstaculo invisible
-        return def() != null;
+        // lo solido son sus cajas (asi se puede entrar en un vehiculo hueco, como la caja de una camioneta)
+        return false;
     }
 
     /** Servidor: la definicion ya no existe (se borro en esta sesion o no se cargo con el mundo). */
@@ -859,6 +1271,7 @@ public class CustomVehicle extends Entity {
             this.deltaRotation = 0f;
         }
         tickRoll(d);
+        updateColliders(d);
         this.checkInsideBlocks();
         if (this.level().isClientSide()) {
             clientTick(d);
@@ -906,10 +1319,17 @@ public class CustomVehicle extends Entity {
             this.physics.speed = 0f;
             this.localFlags = 0;
         }
+        // el morro sube o baja poco a poco (xRot viaja solo al servidor y a los demas)
+        float newPitch = this.getXRot() + (pitchTarget - this.getXRot()) * 0.2f;
+        if (d != null && (deltaYaw != 0f || newPitch != this.getXRot())
+                && rotationBlocked(d, this.getYRot() + deltaYaw, newPitch, this.roll)) {
+            // girar metera alguna pieza en una pared: no gira (como un coche pegado a un muro)
+            deltaYaw = 0f;
+            newPitch = this.getXRot();
+        }
         this.deltaRotation = deltaYaw;
         this.setYRot(this.getYRot() + this.deltaRotation);
-        // el morro sube o baja poco a poco (xRot viaja solo al servidor y a los demas)
-        this.setXRot(this.getXRot() + (pitchTarget - this.getXRot()) * 0.2f);
+        this.setXRot(newPitch);
         float speed = this.physics.speed;
         Vec3 v = this.getDeltaMovement();
         double yaw = Math.toRadians(this.getYRot());
@@ -936,7 +1356,11 @@ public class CustomVehicle extends Entity {
         this.setDeltaMovement(hx, vy, hz);
         double beforeX = this.getX();
         double beforeZ = this.getZ();
-        this.move(MoverType.SELF, this.getDeltaMovement());
+        if (d != null) {
+            moveSolid(d, this.getDeltaMovement());
+        } else {
+            this.move(MoverType.SELF, this.getDeltaMovement());
+        }
         if (this.verticalCollision && !Float.isNaN(this.physics.vy)) {
             // tocando techo o suelo: deja de subir o bajar
             this.physics.vy = 0f;
@@ -1018,8 +1442,58 @@ public class CustomVehicle extends Entity {
     }
 
     /**
-     * Servidor: empuja a los que estan delante y, si la opcion esta activada, los atropella. Lo recorrido se mide
-     * desde el tick anterior (con conductor, la posicion llega del cliente entre ticks, no durante el tick).
+     * Lo que hay que mover una caja (en horizontal) para sacarla de unas cajas solidas, o null si no esta dentro de
+     * ninguna. Sale por el lado mas corto, alejandose del centro de la caja en la que esta.
+     */
+    @Nullable
+    private static Vec3 pushOut(AABB box, List<AABB> solids) {
+        double bestX = 0;
+        double bestZ = 0;
+        boolean inside = false;
+        for (AABB o : solids) {
+            if (!box.intersects(o)) {
+                continue;
+            }
+            double px = Math.min(box.maxX - o.minX, o.maxX - box.minX);
+            double pz = Math.min(box.maxZ - o.minZ, o.maxZ - box.minZ);
+            double cx = (box.minX + box.maxX) / 2 - (o.minX + o.maxX) / 2;
+            double cz = (box.minZ + box.maxZ) / 2 - (o.minZ + o.maxZ) / 2;
+            double mx = 0;
+            double mz = 0;
+            if (px < pz) {
+                mx = Math.copySign(px + 0.01, cx);
+            } else {
+                mz = Math.copySign(pz + 0.01, cz);
+            }
+            if (!inside || mx * mx + mz * mz > bestX * bestX + bestZ * bestZ) {
+                bestX = mx;
+                bestZ = mz;
+            }
+            inside = true;
+        }
+        if (!inside) {
+            return null;
+        }
+        // como mucho medio bloque por tick (si no, salen disparados)
+        double len = Math.sqrt(bestX * bestX + bestZ * bestZ);
+        double k = len > 0.5 ? 0.5 / len : 1.0;
+        return new Vec3(bestX * k, 0.0, bestZ * k);
+    }
+
+    /** Cajas relativas al vehiculo pasadas al mundo. */
+    private List<AABB> absolute(List<double[]> boxes) {
+        List<AABB> out = new ArrayList<>(boxes.size());
+        for (double[] b : boxes) {
+            out.add(new AABB(getX() + b[0], getY() + b[1], getZ() + b[2], getX() + b[3], getY() + b[4], getZ() + b[5]));
+        }
+        return out;
+    }
+
+    /**
+     * Servidor: saca hacia fuera a quien se meta en sus piezas (porque el vehiculo se le echa encima) y, si la opcion
+     * esta activada, lo atropella. Lo recorrido se mide desde el tick anterior (con conductor, la posicion llega del
+     * cliente entre ticks, no durante el tick). Se usan cajas que caben dentro de las piezas: solo empuja a quien de
+     * verdad esta dentro, no a quien esta pegado a una pared en diagonal.
      */
     private void pushEntities(VehicleDefinition d) {
         double dx = Double.isNaN(this.pushX) ? 0.0 : this.getX() - this.pushX;
@@ -1033,14 +1507,45 @@ public class CustomVehicle extends Entity {
             dz = 0.0;
             moved = 0.0;
         }
-        List<Entity> list = this.level().getEntities(this, this.getBoundingBox().inflate(0.2, -0.01, 0.2),
-                EntitySelector.pushableBy(this));
+        Colliders.Frame f = solidFrame(d);
+        double[] b = f.bounds();
+        if (b == null) {
+            return;
+        }
+        // las cajas que ya estan puestas (alrededor de mobs y objetos)
+        List<AABB> placed = new ArrayList<>();
+        for (VehicleCollider c : this.colliders) {
+            if (c.isActive()) {
+                placed.add(c.getBoundingBox());
+            }
+        }
+        AABB area = new AABB(getX() + b[0], getY() + b[1], getZ() + b[2], getX() + b[3], getY() + b[4], getZ() + b[5])
+                .inflate(0.05);
+        List<Entity> list = this.level().getEntities(this, area,
+                e -> !(e instanceof VehicleCollider) && e.isPushable() || e instanceof Player);
         LivingEntity driver = getControllingPassenger();
         for (Entity e : list) {
-            if (e.isPassengerOfSameVehicle(this) || hasPassenger(e)) {
+            if (e.isPassengerOfSameVehicle(this) || hasPassenger(e) || e.isSpectator() || e.noPhysics) {
                 continue;
             }
-            this.push(e);
+            List<AABB> solids = placed;
+            if (e instanceof Player) {
+                // a los jugadores no se les ponen cajas en el servidor: las suyas, solo para esto
+                double[] own = relative(e.getBoundingBox());
+                solids = absolute(Colliders.inner(f, List.of(new Colliders.Zone(own, own, 0)), PLAYER_PUSH_BOXES,
+                        Colliders.INNER_TOLERANCE));
+            }
+            Vec3 out = pushOut(e.getBoundingBox(), solids);
+            if (out == null) {
+                continue;
+            }
+            if (e instanceof Player player) {
+                // el movimiento de los jugadores lo lleva su cliente: se le manda el empujon
+                player.push(out.x, 0.0, out.z);
+                player.hurtMarked = true;
+            } else {
+                e.move(MoverType.SHULKER, out);
+            }
             if (d.runOver && moved > 0.15 && e instanceof LivingEntity living && e.invulnerableTime == 0) {
                 float damage = (float) (moved * 20.0 * 0.6);
                 DamageSource source = driver instanceof Player p ? this.damageSources().playerAttack(p)

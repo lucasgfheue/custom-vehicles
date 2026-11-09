@@ -253,6 +253,8 @@
   "gui.vehiclestudio.parts.kind": "Part type",
   "gui.vehiclestudio.parts.light_mode": "When it shines",
   "gui.vehiclestudio.parts.list": "Model parts (%s/%s)",
+  "gui.vehiclestudio.parts.solid": "Solid (nothing passes through it)",
+  "gui.vehiclestudio.parts.solid_tip": "Players, mobs and the ground collide with this part. Turn it off for parts you can walk through, like a curtain or a doorway.",
   "gui.vehiclestudio.parts.steering_style": "Style",
   "gui.vehiclestudio.prop_axis.front": "Forward",
   "gui.vehiclestudio.prop_axis.front.tip": "Spins facing forward, like a plane's propeller (turn it 90° for a tail rotor).",

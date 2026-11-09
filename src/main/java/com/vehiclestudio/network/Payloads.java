@@ -136,6 +136,23 @@ public final class Payloads {
         }
     }
 
+    /**
+     * Golpe o clic derecho en un vehiculo, elegido en el cliente con un rayo contra sus piezas (action: 0 = golpe,
+     * 1 = usar con la mano principal, 2 = con la otra mano).
+     */
+    public record VehicleHit(int entityId, int action) implements CustomPacketPayload {
+        public static final Type<VehicleHit> TYPE = typeOf("vehicle_hit");
+        public static final StreamCodec<ByteBuf, VehicleHit> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, VehicleHit::entityId,
+                ByteBufCodecs.VAR_INT, VehicleHit::action,
+                VehicleHit::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** Tocar la bocina o encender/apagar las luces (action: 0 = bocina, 1 = luces). */
     public record VehicleAction(int action) implements CustomPacketPayload {
         public static final Type<VehicleAction> TYPE = typeOf("vehicle_action");
